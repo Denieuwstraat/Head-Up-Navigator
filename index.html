@@ -122,6 +122,7 @@
     #map{
       width:100%;
       height:100%;
+      /* NOTE: CSS filter removed on request. B/W comes from the tile source. */
       transform: translateZ(0);
     }
     /* optional dim overlay so HUD stays readable */
@@ -261,7 +262,7 @@
   const HEADING_MIN_SPEED_MPS = 4;
   const UPDATE_UI_MS = 500;
 
-  // Zwart-wit tiles (gratis). Als deze ooit traag is, blijft CSS filter nog steeds B/W afdwingen.
+  // Zwart-wit tiles (gratis) -> geen CSS filter nodig
   const BW_TILES = "https://tiles.wmflabs.org/bw-mapnik/{z}/{x}/{y}.png";
 
   // --------------------------
@@ -299,6 +300,10 @@
 
   let routePts = [];
   let wpIdx = 0;
+
+  // NEW: OSRM steps (street names / maneuvers)
+  // We keep a list of "step anchors" so we can show a relevant street name while driving.
+  let routeSteps = []; // [{name, lat, lon, type, modifier}]
 
   // Leaflet
   let map = null, posMarker = null, routeLine = null, wpMarker = null;
@@ -347,6 +352,25 @@
 
   function wrap180(d) {
     return ((d + 180) % 360) - 180;
+  }
+
+  // --------------------------
+  // Street helper (NEW)
+  // --------------------------
+  function nearestStep(cur) {
+    if (!routeSteps.length) return null;
+    let best = null;
+    let bestD = Infinity;
+    for (const s of routeSteps) {
+      const d = haversineM(cur, s);
+      if (d < bestD) { bestD = d; best = s; }
+    }
+    return best;
+  }
+
+  function cleanStreetName(name) {
+    const n = (name || "").trim();
+    return n.length ? n : null;
   }
 
   // --------------------------
@@ -429,13 +453,48 @@
     return { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon) };
   }
 
+  // NEW: steps=true + fill routeSteps
   async function fetchOsrmRoute(start, end) {
     const url = `${OSRM_BASE}/route/v1/driving/${start.lon},${start.lat};${end.lon},${end.lat}?overview=full&geometries=geojson&steps=true`;
     const r = await fetch(url);
     const data = await r.json();
     if (!data || data.code !== "Ok") throw new Error("OSRM route faalde.");
-    const coords = data.routes[0].geometry.coordinates;
-    return coords.map(c => ({ lon: c[0], lat: c[1] }));
+
+    const route = data.routes[0];
+
+    // geometry coords: [lon,lat]
+    const coords = route.geometry.coordinates.map(c => ({ lon: c[0], lat: c[1] }));
+
+    // Extract step anchors (street name + maneuver location)
+    routeSteps = [];
+    const leg = route.legs && route.legs[0];
+    if (leg && Array.isArray(leg.steps)) {
+      for (const s of leg.steps) {
+        const name = cleanStreetName(s.name);
+        const loc = s.maneuver && Array.isArray(s.maneuver.location) ? s.maneuver.location : null;
+        if (loc) {
+          routeSteps.push({
+            name: name, // can be null
+            lon: loc[0],
+            lat: loc[1],
+            type: s.maneuver?.type || null,
+            modifier: s.maneuver?.modifier || null
+          });
+        }
+      }
+      // Optional: collapse duplicates (same name consecutive)
+      const compact = [];
+      for (const st of routeSteps) {
+        const prev = compact[compact.length - 1];
+        if (!prev) { compact.push(st); continue; }
+        const sameName = (prev.name || "") === (st.name || "");
+        if (sameName) continue;
+        compact.push(st);
+      }
+      routeSteps = compact;
+    }
+
+    return coords;
   }
 
   // --------------------------
@@ -529,8 +588,16 @@
     metersEl.textContent = `${shown} m`;
 
     const kmh = Math.max(0, Math.round(speedMps * 3.6));
-    statusEl.textContent = `WP ${wpIdx+1}/${routePts.length} | ${kmh} km/h | ${headingDeg==null ? "heading ?" : "heading ok"}`;
 
+    // NEW: street name display
+    const step = nearestStep(cur);
+    const street = step && step.name ? step.name : null;
+    const streetTxt = street ? ` • ${street}` : "";
+
+    statusEl.textContent =
+      `WP ${wpIdx+1}/${routePts.length} | ${kmh} km/h${streetTxt}`;
+
+    // Map update
     if (debugMapEnabled && map) {
       const ll = [cur.lat, cur.lon];
       if (!posMarker) {
@@ -693,6 +760,7 @@
   function stopAll() {
     stopWatch();
     routePts = [];
+    routeSteps = []; // NEW reset
     wpIdx = 0;
     headingDeg = null;
     lastFix = null;
