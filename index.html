@@ -4,18 +4,44 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
   <title>HUD Navigator (OSRM)</title>
+
+  <!-- PWA / fullscreen hints -->
+  <meta name="theme-color" content="#000000">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="HUD Nav">
+  <link rel="manifest" href="manifest.webmanifest">
+  <!-- Optioneel (alleen als je de icon files toevoegt):
+  <link rel="apple-touch-icon" href="icon-192.png">
+  -->
+
   <style>
     :root { --bg:#000; --fg:#fff; --muted:#9aa0a6; }
-    html,body { height:100%; margin:0; background:var(--bg); color:var(--fg); font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; }
-    .screen { display:none; height:100%; width:100%; }
+    html,body {
+      height:100%;
+      margin:0;
+      background:var(--bg);
+      color:var(--fg);
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial;
+      overscroll-behavior: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    /* Use dvh to avoid mobile URL-bar "jump" */
+    .screen { display:none; height:100dvh; width:100vw; }
     .screen.active { display:flex; }
+
     #start { flex-direction:column; align-items:center; justify-content:center; gap:16px; padding:18px; }
     .bigbtn {
-      width:min(520px, 92vw); height: min(44vh, 320px);
+      width:min(520px, 92vw);
+      height: min(44dvh, 320px);
       border-radius: 22px; border: 2px solid #2a2a2a;
-      background:#080808; color:var(--fg); font-size: 28px; font-weight: 800;
+      background:#080808; color:var(--fg);
+      font-size: 28px; font-weight: 800;
       display:flex; align-items:center; justify-content:center; text-align:center;
       user-select:none;
+      touch-action: manipulation;
     }
     .row { width:min(520px, 92vw); display:flex; gap:10px; }
     input[type="text"]{
@@ -25,27 +51,43 @@
     button{
       padding:14px 14px; border-radius:14px; border:1px solid #2a2a2a;
       background:#111; color:var(--fg); font-size:16px; font-weight:700;
+      touch-action: manipulation;
     }
     button:active, .bigbtn:active { transform: scale(0.99); }
     .small { color:var(--muted); font-size: 13px; line-height: 1.35; text-align:center; width:min(520px, 92vw); }
 
     #hud { position:relative; align-items:center; justify-content:center; flex-direction:column; gap:8px; overflow:hidden; }
     #hudContent { width:100%; height:100%; display:flex; align-items:center; justify-content:center; flex-direction:column; gap:10px; }
-    #arrowWrap { width: min(70vw, 420px); height: min(42vh, 340px); display:flex; align-items:center; justify-content:center; }
+    #arrowWrap { width: min(70vw, 420px); height: min(42dvh, 340px); display:flex; align-items:center; justify-content:center; }
     #meters { font-size: clamp(44px, 7vw, 92px); font-weight: 900; letter-spacing: 0.5px; }
     #status { font-size: 14px; color: var(--muted); padding: 0 16px; text-align:center; }
+
     #topBar {
-      position:absolute; top:0; left:0; right:0; padding: 10px 12px;
+      position:absolute;
+      top: env(safe-area-inset-top);
+      left:0; right:0;
+      padding: 10px 12px;
       display:flex; justify-content:space-between; align-items:center; gap:10px;
+      z-index: 10;
     }
-    .pill { padding:8px 10px; border:1px solid #2a2a2a; border-radius: 999px; background:#0b0b0b; font-size:13px; color: var(--fg); }
+    .pill {
+      padding:8px 10px;
+      border:1px solid #2a2a2a;
+      border-radius: 999px;
+      background:#0b0b0b;
+      font-size:13px;
+      color: var(--fg);
+      user-select:none;
+    }
     .pill.muted { color: var(--muted); }
     #mapToggle { cursor:pointer; }
+
     #mapPane {
-      position:absolute; right:10px; bottom:10px;
-      width: min(40vw, 360px); height: min(28vh, 240px);
+      position:absolute; right:10px; bottom: calc(10px + env(safe-area-inset-bottom));
+      width: min(40vw, 360px); height: min(28dvh, 240px);
       border:1px solid #2a2a2a; border-radius: 16px; overflow:hidden;
       background:#000; display:none;
+      z-index: 5;
     }
     #map { width:100%; height:100%; }
 
@@ -97,6 +139,11 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
 (() => {
+  // Register service worker (PWA / installable)
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.register("./sw.js").catch(() => {});
+  }
+
   // --------------------------
   // Config
   // --------------------------
@@ -175,7 +222,6 @@
   // SVG arrows (thick, HUD-friendly)
   // --------------------------
   function svgArrow(type) {
-    // type: "up","right","left","upright","upleft","downright","downleft","uturn","nofix"
     const common = `viewBox="0 0 100 100" width="100%" height="100%"`;
     const stroke = `fill="none" stroke="white" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"`;
     const fill = `fill="white"`;
@@ -189,7 +235,6 @@
         <path d="M30 55 L42 43" ${stroke}/>
       </svg>`;
     }
-    // base arrow pointing up, then rotate via transform
     const base = `<svg ${common}>
       <path d="M50 85 V20" ${stroke}/>
       <path d="M50 20 L32 38" ${stroke}/>
@@ -224,7 +269,6 @@
       let seg = haversineM(p0, p1);
       if (seg < 1) continue;
 
-      // walk along segment placing points every stepM̆
       while (seg >= (stepM - acc)) {
         const t = (stepM - acc) / seg;
         const lat = p0.lat + (p1.lat - p0.lat) * t;
@@ -237,7 +281,6 @@
       }
       acc += seg;
     }
-    // ensure last point
     const last = points[points.length - 1];
     const end = out[out.length - 1];
     if (haversineM(end, last) > stepM * 0.3) out.push(last);
@@ -261,7 +304,6 @@
   }
 
   async function fetchOsrmRoute(start, end) {
-    // OSRM expects lon,lat
     const url = `${OSRM_BASE}/route/v1/driving/${start.lon},${start.lat};${end.lon},${end.lat}?overview=full&geometries=geojson&steps=false`;
     const r = await fetch(url);
     const data = await r.json();
@@ -293,7 +335,6 @@
     gpsPill.textContent = "GPS: ok";
     gpsPill.style.borderColor = "#2a2a2a";
 
-    // heading from movement (more stable in car)
     if (lastFix) {
       const dt = Math.max(0.001, (ts - lastFix.ts) / 1000);
       const dist = haversineM({lat:lastFix.lat, lon:lastFix.lon}, {lat, lon});
@@ -339,17 +380,14 @@
     let target = routePts[wpIdx];
     let d = haversineM(cur, target);
 
-    // advance waypoint
     if (d <= ARRIVE_RADIUS_M && wpIdx < routePts.length - 1) {
       wpIdx++;
       target = routePts[wpIdx];
       d = haversineM(cur, target);
     }
 
-    // compute arrow
     let arrowType = "up";
     if (headingDeg == null) {
-      // low speed / no heading: keep neutral
       arrowType = "up";
     } else {
       const b = bearingDeg(cur, target);
@@ -359,7 +397,6 @@
 
     arrowWrap.innerHTML = svgArrow(arrowType);
 
-    // distance rounding for calmer HUD
     let shown = d;
     if (d > 500) shown = Math.round(d / 10) * 10;
     else if (d > 80) shown = Math.round(d / 5) * 5;
@@ -370,7 +407,6 @@
     const kmh = Math.max(0, Math.round(speedMps * 3.6));
     statusEl.textContent = `WP ${wpIdx+1}/${routePts.length} | ${kmh} km/h | ${headingDeg==null ? "heading ?" : "heading ok"}`;
 
-    // map update
     if (debugMapEnabled && map) {
       const ll = [cur.lat, cur.lon];
       if (!posMarker) {
@@ -379,8 +415,6 @@
       } else posMarker.setLatLng(ll);
 
       if (wpMarker) wpMarker.setLatLng([target.lat, target.lon]);
-
-      // keep map centered lightly
       map.panTo(ll, {animate:false});
     }
   }
@@ -391,9 +425,7 @@
   function ensureMap() {
     if (map) return;
     map = L.map("map", { zoomControl:false });
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      maxZoom: 19
-    }).addTo(map);
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19 }).addTo(map);
     map.setView([52.0, 5.0], 12);
   }
 
@@ -421,6 +453,9 @@
     mapPane.style.display = debugMapEnabled ? "block" : "none";
     if (debugMapEnabled) ensureMap();
 
+    // Try request fullscreen after user-gesture (best-effort)
+    requestFullscreenBestEffort();
+
     // tap anywhere toggles mirror (HUD reflection)
     hudScreen.onclick = () => toggleMirror();
   }
@@ -441,6 +476,13 @@
     debugBtn.textContent = debugMapEnabled ? "Kaart: aan" : "Kaart: uit";
     mapPane.style.display = (hudScreen.classList.contains("active") && debugMapEnabled) ? "block" : "none";
     if (debugMapEnabled) ensureMap();
+  }
+
+  function requestFullscreenBestEffort() {
+    // Works best on Android Chrome; iOS ignores.
+    const el = document.documentElement;
+    const fn = el.requestFullscreen || el.webkitRequestFullscreen;
+    if (fn) { try { fn.call(el); } catch {} }
   }
 
   // SpeechRecognition
@@ -486,8 +528,7 @@
     gpsPill.textContent = "GPS: …";
 
     try {
-      startWatch(); // starts GPS
-      // wait for first fix
+      startWatch();
       await waitForFix(12000);
       const start = {lat:lastFix.lat, lon:lastFix.lon};
 
@@ -497,7 +538,6 @@
       startStatus.textContent = "Route berekenen…";
       const rawRoute = await fetchOsrmRoute(start, dest);
 
-      // resample
       routePts = resampleRoute(rawRoute, LOOKAHEAD_STEP_M);
       wpIdx = 0;
 
@@ -543,7 +583,7 @@
   mapToggle.addEventListener("click", (e) => { e.stopPropagation(); toggleMapPane(); });
   stopBtn.addEventListener("click", (e) => { e.stopPropagation(); stopAll(); });
 
-  // Long press to stop (safety)
+  // Long press to stop
   let lpTimer = null;
   hudScreen.addEventListener("touchstart", () => {
     lpTimer = setTimeout(() => stopAll(), 900);
@@ -555,8 +595,8 @@
 
   // initial status
   startStatus.textContent = speechSupported()
-    ? "Tip: Spreek adres. Sta locatie toe. In HUD: tik = spiegeling, 🗺 = kaart."
-    : "Spraak niet ondersteund in deze browser. Typ het adres. Sta locatie toe.";
+    ? "Tip: Spreek adres. Sta locatie toe. In HUD: tik = spiegeling, 🗺 = kaart. Voeg toe aan startscherm voor écht fullscreen."
+    : "Spraak niet ondersteund in deze browser. Typ het adres. Sta locatie toe. Voeg toe aan startscherm voor écht fullscreen.";
 
 })();
 </script>
