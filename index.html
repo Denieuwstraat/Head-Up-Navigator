@@ -122,8 +122,6 @@
     #map{
       width:100%;
       height:100%;
-      /* Force black/white even if tiles are colored */
-      filter: grayscale(1) contrast(1.25) brightness(0.85);
       transform: translateZ(0);
     }
     /* optional dim overlay so HUD stays readable */
@@ -432,7 +430,7 @@
   }
 
   async function fetchOsrmRoute(start, end) {
-    const url = `${OSRM_BASE}/route/v1/driving/${start.lon},${start.lat};${end.lon},${end.lat}?overview=full&geometries=geojson&steps=false`;
+    const url = `${OSRM_BASE}/route/v1/driving/${start.lon},${start.lat};${end.lon},${end.lat}?overview=full&geometries=geojson&steps=true`;
     const r = await fetch(url);
     const data = await r.json();
     if (!data || data.code !== "Ok") throw new Error("OSRM route faalde.");
