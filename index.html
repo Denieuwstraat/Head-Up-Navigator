@@ -1,912 +1,906 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="nl">
+
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-  <title>HUD Navigator (OSRM)</title>
-
-  <!-- PWA / fullscreen hints -->
-  <meta name="theme-color" content="#000000">
-  <meta name="mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="HUD Nav">
-  <link rel="manifest" href="manifest.webmanifest">
-
-  <style>
-    :root { --bg:#000; --fg:#fff; --muted:#9aa0a6; }
-
-    html,body{
-      height:100%;
-      margin:0;
-      background:var(--bg);
-      color:var(--fg);
-      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial;
-      overscroll-behavior:none;
-      -webkit-tap-highlight-color: transparent;
-    }
-
-    .screen{ display:none; height:100dvh; width:100vw; }
-    .screen.active{ display:flex; }
-
-    #start{ flex-direction:column; align-items:center; justify-content:center; gap:16px; padding:18px; }
-    .bigbtn{
-      width:min(520px, 92vw);
-      height:min(44dvh, 320px);
-      border-radius:22px;
-      border:2px solid #2a2a2a;
-      background:#080808;
-      color:var(--fg);
-      font-size:28px;
-      font-weight:800;
-      display:flex;
-      align-items:center;
-      justify-content:center;
-      text-align:center;
-      user-select:none;
-      touch-action: manipulation;
-    }
-
-    .row{ width:min(520px, 92vw); display:flex; gap:10px; }
-    input[type="text"]{
-      flex:1;
-      padding:14px 14px;
-      border-radius:14px;
-      border:1px solid #2a2a2a;
-      background:#0b0b0b;
-      color:var(--fg);
-      font-size:16px;
-    }
-    button{
-      padding:14px 14px;
-      border-radius:14px;
-      border:1px solid #2a2a2a;
-      background:#111;
-      color:var(--fg);
-      font-size:16px;
-      font-weight:700;
-      touch-action: manipulation;
-    }
-    button:active, .bigbtn:active{ transform: scale(0.99); }
-    .small{
-      color:var(--muted);
-      font-size:13px;
-      line-height:1.35;
-      text-align:center;
-      width:min(520px, 92vw);
-    }
-
-    /* HUD */
-    #hud{
-      position:relative;
-      align-items:center;
-      justify-content:center;
-      flex-direction:column;
-      overflow:hidden;
-      background:#000;
-    }
-
-    /* Stage wrapper so rotate/mirror applies to HUD + map together */
-    #hudStage{
-      position:absolute;
-      inset:0;
-      z-index:1;
-    }
-
-    /* inner that we transform */
-    #hudStageInner{
-      position:absolute;
-      left:50%;
-      top:50%;
-      width:100%;
-      height:100%;
-      transform: translate(-50%, -50%) rotate(var(--rot, 0deg)) scaleX(var(--mx, 1));
-      transform-origin: center;
-    }
-
-    /* When quarter-turn: swap width/height to fit */
-    #hud.quarterturn #hudStageInner{
-      width:100dvh;
-      height:100vw;
-    }
-
-    /* ----- Map as BACKGROUND layer (always behind HUD content) ----- */
-    #mapPane{
-      position:absolute;
-      inset:0;
-      background:#000;
-      z-index:0;              /* <- behind */
-      display:none;
-      overflow:hidden;
-    }
-    #map{
-      width:100%;
-      height:100%;
-      transform: translateZ(0);
-    }
-    /* dim overlay so HUD stays readable */
-    #mapDim{
-      position:absolute;
-      inset:0;
-      background: rgba(0,0,0,0.45);
-      pointer-events:none;
-    }
-
-    /* ----- HUD content layer (always on top) ----- */
-    #hudContent{
-      position:absolute;
-      inset:0;
-      z-index:2;              /* <- above map */
-      display:flex;
-      flex-direction:column;
-      align-items:center;
-      justify-content:center;
-      gap:10px;
-      pointer-events:none;    /* tap goes to parent (mirror) */
-    }
-
-    #arrowWrap{
-      width:min(70vw, 420px);
-      height:min(42dvh, 340px);
-      display:flex;
-      align-items:center;
-      justify-content:center;
-    }
-    #meters{
-      font-size: clamp(44px, 7vw, 92px);
-      font-weight:900;
-      letter-spacing:0.5px;
-    }
-    #status{
-      font-size:14px;
-      color:var(--muted);
-      padding:0 16px;
-      text-align:center;
-      max-width:min(92vw, 720px);
-    }
-
-    /* Top bar above everything */
-    #topBar{
-      position:absolute;
-      top: env(safe-area-inset-top);
-      left:0; right:0;
-      padding: 10px 12px;
-      display:flex;
-      justify-content:space-between;
-      align-items:center;
-      gap:10px;
-      z-index:10;
-      pointer-events:auto;
-    }
-    .pill{
-      padding:8px 10px;
-      border:1px solid #2a2a2a;
-      border-radius:999px;
-      background:#0b0b0b;
-      font-size:13px;
-      color:var(--fg);
-      user-select:none;
-      pointer-events:auto;
-    }
-    .pill.muted{ color:var(--muted); }
-    #mapToggle, #rotToggle{ cursor:pointer; }
-
-    /* Leaflet minimal */
-    .leaflet-control-attribution, .leaflet-control-zoom{ display:none !important; }
-  </style>
-
-  <!-- Leaflet -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-</head>
-<body>
-
-<div id="start" class="screen active">
-  <div id="voiceBtn" class="bigbtn">🎙 Spreek adres</div>
-
-  <div class="row">
-    <input id="addr" type="text" placeholder="…of typ adres (bv. Coolsingel 1 Rotterdam)" autocomplete="off" />
-  </div>
-
-  <div class="row">
-    <button id="startBtn" style="flex:1">Start navigatie</button>
-    <button id="debugBtn">Kaart: aan</button>
-  </div>
-
-  <div id="startStatus" class="small">Tip: Sta locatie toe. In HUD: tik = spiegeling.</div>
-</div>
-
-<div id="hud" class="screen">
-  <div id="topBar">
-    <div class="pill" id="gpsPill">GPS: …</div>
-    <div class="pill muted" id="rotToggle">⤾ 90°</div>
-    <div class="pill muted" id="mapToggle">🗺</div>
-    <div class="pill muted" id="stopBtn">Stop</div>
-  </div>
-
-  <div id="hudStage">
-    <div id="hudStageInner">
-
-      <!-- Map background -->
-      <div id="mapPane">
-        <div id="map"></div>
-        <div id="mapDim"></div>
-      </div>
-
-      <!-- HUD foreground -->
-      <div id="hudContent">
-        <div id="arrowWrap"></div>
-        <div id="meters">-- m</div>
-        <div id="status">Wachten…</div>
-      </div>
-
-    </div>
-  </div>
-</div>
-
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script>
-(() => {
-  // --------------------------
-  // PWA SW (optional, but recommended)
-  // --------------------------
-  if ("serviceWorker" in navigator) {
-    navigator.serviceWorker.register("./sw.js").catch(() => {});
-  }
-
-  // --------------------------
-  // Config
-  // --------------------------
-  const OSRM_BASE = "https://router.project-osrm.org";
-  const NOMINATIM = "https://nominatim.openstreetmap.org/search";
-  const ARRIVE_RADIUS_M = 80;
-  const LOOKAHEAD_STEP_M = 60;
-  const HEADING_MIN_SPEED_MPS = 4;
-  const UPDATE_UI_MS = 500;
-
-  // Zwart-wit tiles (gratis) -> geen CSS filter nodig
-  const BW_TILES = "https://tiles.wmflabs.org/bw-mapnik/{z}/{x}/{y}.png";
-
-  // Persisted session state (prevents "route disappears" after reload/tab-kill)
-  const STATE_KEY = "hudnav_state_v1";
-  let lastStateSave = 0;
-
-  // Wake Lock (prevents sleep -> less chance Chrome kills the tab)
-  let wakeLock = null;
-
-  // --------------------------
-  // DOM
-  // --------------------------
-  const startScreen = document.getElementById("start");
-  const hudScreen   = document.getElementById("hud");
-  const voiceBtn    = document.getElementById("voiceBtn");
-  const startBtn    = document.getElementById("startBtn");
-  const debugBtn    = document.getElementById("debugBtn");
-  const addrInput   = document.getElementById("addr");
-  const startStatus = document.getElementById("startStatus");
-
-  const gpsPill     = document.getElementById("gpsPill");
-  const rotToggle   = document.getElementById("rotToggle");
-  const mapToggle   = document.getElementById("mapToggle");
-  const stopBtn     = document.getElementById("stopBtn");
-
-  const arrowWrap   = document.getElementById("arrowWrap");
-  const metersEl    = document.getElementById("meters");
-  const statusEl    = document.getElementById("status");
-  const mapPane     = document.getElementById("mapPane");
-
-  // --------------------------
-  // State
-  // --------------------------
-  let debugMapEnabled = true;
-  let mirrored = false;
-  let quarterTurn = false;
-
-  let watchId = null;
-  let lastFix = null;
-  let headingDeg = null;
-  let speedMps = 0;
-
-  let routePts = [];
-  let wpIdx = 0;
-
-  // OSRM steps (street names / maneuvers)
-  let routeSteps = []; // [{name, lat, lon, type, modifier}]
-
-  // Leaflet
-  let map = null, posMarker = null, routeLine = null, wpMarker = null;
-
-  // --------------------------
-  // Persistence
-  // --------------------------
-  function saveState() {
-    const state = {
-      t: Date.now(),
-      routePts,
-      routeSteps,
-      wpIdx,
-      addr: addrInput.value || "",
-      debugMapEnabled,
-      mirrored,
-      quarterTurn
-    };
-    try {
-      localStorage.setItem(STATE_KEY, JSON.stringify(state));
-    } catch {}
-  }
-
-  function loadState() {
-    try {
-      const raw = localStorage.getItem(STATE_KEY);
-      if (!raw) return null;
-      const s = JSON.parse(raw);
-      if (!s || !Array.isArray(s.routePts) || s.routePts.length < 2) return null;
-      return s;
-    } catch {
-      return null;
-    }
-  }
-
-  function clearState() {
-    try { localStorage.removeItem(STATE_KEY); } catch {}
-  }
-
-  // --------------------------
-  // Wake Lock
-  // --------------------------
-  async function requestWakeLock() {
-    try {
-      if ("wakeLock" in navigator) {
-        wakeLock = await navigator.wakeLock.request("screen");
-      }
-    } catch {}
-  }
-
-  function releaseWakeLock() {
-    try { wakeLock?.release(); } catch {}
-    wakeLock = null;
-  }
-
-  document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "visible" && hudScreen.classList.contains("active")) {
-      requestWakeLock();
-    }
-  });
-
-  // --------------------------
-  // Helpers
-  // --------------------------
-  function applyStageTransform() {
-    hudScreen.style.setProperty("--mx", mirrored ? -1 : 1);
-    hudScreen.style.setProperty("--rot", quarterTurn ? "90deg" : "0deg");
-    hudScreen.classList.toggle("quarterturn", quarterTurn);
-
-    if (debugMapEnabled && map) {
-      setTimeout(() => { try { map.invalidateSize(true); } catch {} }, 80);
-    }
-  }
-
-  function requestFullscreenBestEffort() {
-    const el = document.documentElement;
-    const fn = el.requestFullscreen || el.webkitRequestFullscreen;
-    if (fn) { try { fn.call(el); } catch {} }
-  }
-
-  // --------------------------
-  // Math helpers
-  // --------------------------
-  const R = 6371000;
-  const toRad = d => d * Math.PI / 180;
-  const toDeg = r => r * 180 / Math.PI;
-
-  function haversineM(a, b) {
-    const dLat = toRad(b.lat - a.lat);
-    const dLon = toRad(b.lon - a.lon);
-    const lat1 = toRad(a.lat), lat2 = toRad(b.lat);
-    const x = Math.sin(dLat/2)**2 + Math.cos(lat1)*Math.cos(lat2)*Math.sin(dLon/2)**2;
-    return 2 * R * Math.asin(Math.sqrt(x));
-  }
-
-  function bearingDeg(a, b) {
-    const lat1 = toRad(a.lat), lat2 = toRad(b.lat);
-    const dLon = toRad(b.lon - a.lon);
-    const y = Math.sin(dLon) * Math.cos(lat2);
-    const x = Math.cos(lat1)*Math.sin(lat2) - Math.sin(lat1)*Math.cos(lat2)*Math.cos(dLon);
-    return (toDeg(Math.atan2(y, x)) + 360) % 360;
-  }
-
-  function wrap180(d) {
-    return ((d + 180) % 360) - 180;
-  }
-
-  // --------------------------
-  // Street helper
-  // --------------------------
-  function nearestStep(cur) {
-    if (!routeSteps.length) return null;
-    let best = null;
-    let bestD = Infinity;
-    for (const s of routeSteps) {
-      const d = haversineM(cur, s);
-      if (d < bestD) { bestD = d; best = s; }
-    }
-    return best;
-  }
-
-  function cleanStreetName(name) {
-    const n = (name || "").trim();
-    return n.length ? n : null;
-  }
-
-  // --------------------------
-  // SVG arrows
-  // --------------------------
-  function svgArrow(type) {
-    const common = `viewBox="0 0 100 100" width="100%" height="100%"`;
-    const stroke = `fill="none" stroke="white" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"`;
-    const fill = `fill="white"`;
-    if (type === "nofix") {
-      return `<svg ${common}><circle cx="35" cy="50" r="6" ${fill}/><circle cx="50" cy="50" r="6" ${fill}/><circle cx="65" cy="50" r="6" ${fill}/></svg>`;
-    }
-    if (type === "uturn") {
-      return `<svg ${common}>
-        <path d="M70 80 V45 Q70 25 50 25 Q30 25 30 45 V55" ${stroke}/>
-        <path d="M30 55 L18 43" ${stroke}/>
-        <path d="M30 55 L42 43" ${stroke}/>
-      </svg>`;
-    }
-    const base = `<svg ${common}>
-      <path d="M50 85 V20" ${stroke}/>
-      <path d="M50 20 L32 38" ${stroke}/>
-      <path d="M50 20 L68 38" ${stroke}/>
-    </svg>`;
-    const rot = {
-      up: 0, upright: 45, right: 90, downright: 135,
-      downleft: -135, left: -90, upleft: -45
-    }[type] ?? 0;
-    return `<div style="width:100%;height:100%;transform:rotate(${rot}deg)">${base}</div>`;
-  }
-
-  function deltaToArrow(delta) {
-    const a = Math.abs(delta);
-    if (a < 15) return "up";
-    if (a < 35) return delta > 0 ? "upright" : "upleft";
-    if (a < 80) return delta > 0 ? "right" : "left";
-    if (a < 120) return delta > 0 ? "downright" : "downleft";
-    return "uturn";
-  }
-
-  // --------------------------
-  // Route resampling
-  // --------------------------
-  function resampleRoute(points, stepM) {
-    if (points.length < 2) return points.slice();
-    const out = [points[0]];
-    let acc = 0;
-    for (let i = 1; i < points.length; i++) {
-      let p0 = out[out.length - 1];
-      let p1 = points[i];
-      let seg = haversineM(p0, p1);
-      if (seg < 1) continue;
-
-      while (seg >= (stepM - acc)) {
-        const t = (stepM - acc) / seg;
-        const lat = p0.lat + (p1.lat - p0.lat) * t;
-        const lon = p0.lon + (p1.lon - p0.lon) * t;
-        const np = {lat, lon};
-        out.push(np);
-        p0 = np;
-        seg = haversineM(p0, p1);
-        acc = 0;
-      }
-      acc += seg;
-    }
-    const last = points[points.length - 1];
-    const end = out[out.length - 1];
-    if (haversineM(end, last) > stepM * 0.3) out.push(last);
-    return out;
-  }
-
-  // --------------------------
-  // APIs
-  // --------------------------
-  async function geocodeAddress(q) {
-    const url = `${NOMINATIM}?format=json&limit=1&q=${encodeURIComponent(q)}`;
-    const r = await fetch(url, { headers: { "Accept": "application/json" } });
-    const data = await r.json();
-    if (!data || !data[0]) throw new Error("Adres niet gevonden.");
-    return { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon) };
-  }
-
-  async function fetchOsrmRoute(start, end) {
-    const url = `${OSRM_BASE}/route/v1/driving/${start.lon},${start.lat};${end.lon},${end.lat}?overview=full&geometries=geojson&steps=true`;
-    const r = await fetch(url);
-    const data = await r.json();
-    if (!data || data.code !== "Ok") throw new Error("OSRM route faalde.");
-
-    const route = data.routes[0];
-    const coords = route.geometry.coordinates.map(c => ({ lon: c[0], lat: c[1] }));
-
-    // Extract step anchors (street name + maneuver location)
-    routeSteps = [];
-    const leg = route.legs && route.legs[0];
-    if (leg && Array.isArray(leg.steps)) {
-      for (const s of leg.steps) {
-        const name = cleanStreetName(s.name);
-        const loc = s.maneuver && Array.isArray(s.maneuver.location) ? s.maneuver.location : null;
-        if (loc) {
-          routeSteps.push({
-            name: name,
-            lon: loc[0],
-            lat: loc[1],
-            type: s.maneuver?.type || null,
-            modifier: s.maneuver?.modifier || null
-          });
+    <meta charset="UTF-8">
+    <meta name="viewport"
+        content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-fullscreen">
+    <title>Head-Up Navigator</title>
+    <link rel="manifest"
+        href="data:application/json;base64,eyJuYW1lIjoiSGVhZC1VcCBOYXZpZ2F0b3IiLCJzaG9ydF9uYW1lIjoiSFVEIE5hdiIsInN0YXJ0X3VybCI6Ii8iLCJkaXNwbGF5Ijoic3RhbmRhbG9uZSIsImJhY2tncm91bmRfY29sb3IiOiIjMDAwMDAwIiwidGhlbWVfY29sb3IiOiIjMDAwMDAwIiwib3JpZW50YXRpb24iOiJsYW5kc2NhcGUiLCJpY29ucyI6W3sic3JjIjoiZGF0YTppbWFnZS9zdmcreG1sLCUzQ3N2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHZpZXdCb3g9JzAgMCAxMDAgMTAwJyUzRSUzQ3JlY3Qgd2lkdGg9JzEwMCcgaGVpZ2h0PScxMDAnIGZpbGw9JyUyMzAwMCcvJTNFJTNDcGF0aCBkPSdNNTAgMjBMNzAgNTBINTVWODBINDVWNTBIMzBaJyBmaWxsPSclMjNmZmYnLyUzRSUzQy9zdmclM0UiLCJzaXplcyI6IjE5MngxOTIiLCJ0eXBlIjoiaW1hZ2Uvc3ZnK3htbCJ9XX0=">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
         }
-      }
-      // collapse duplicates
-      const compact = [];
-      for (const st of routeSteps) {
-        const prev = compact[compact.length - 1];
-        if (!prev) { compact.push(st); continue; }
-        const sameName = (prev.name || "") === (st.name || "");
-        if (sameName) continue;
-        compact.push(st);
-      }
-      routeSteps = compact;
-    }
 
-    return coords;
-  }
+        html,
+        body {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: #000;
+            color: #fff;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            touch-action: none;
+            user-select: none;
+            -webkit-user-select: none;
+        }
 
-  // --------------------------
-  // GPS
-  // --------------------------
-  function startWatch() {
-    if (!navigator.geolocation) throw new Error("Geolocation niet beschikbaar.");
-    const opts = { enableHighAccuracy: true, maximumAge: 500, timeout: 10000 };
-    watchId = navigator.geolocation.watchPosition(onPos, onPosErr, opts);
-  }
+        #app {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+        }
 
-  function stopWatch() {
-    if (watchId != null) navigator.geolocation.clearWatch(watchId);
-    watchId = null;
-  }
+        /* Setup Screen */
+        #setup {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem;
+            gap: 2rem;
+        }
 
-  function onPos(pos) {
-    const { latitude: lat, longitude: lon, speed } = pos.coords;
-    const ts = pos.timestamp || Date.now();
-    speedMps = (typeof speed === "number" && !Number.isNaN(speed)) ? speed : 0;
+        #setup h1 {
+            font-size: 2rem;
+            font-weight: 300;
+            letter-spacing: 0.1em;
+        }
 
-    const cur = { lat, lon, ts };
-    gpsPill.textContent = "GPS: ok";
-    gpsPill.style.borderColor = "#2a2a2a";
+        #destinationInput {
+            width: 100%;
+            max-width: 500px;
+            padding: 1rem 1.5rem;
+            font-size: 1.2rem;
+            background: #1a1a1a;
+            border: 1px solid #333;
+            color: #fff;
+            border-radius: 8px;
+            outline: none;
+        }
 
-    if (lastFix) {
-      const dt = Math.max(0.001, (ts - lastFix.ts) / 1000);
-      const dist = haversineM({lat:lastFix.lat, lon:lastFix.lon}, {lat, lon});
-      const estSpeed = dist / dt;
-      if (estSpeed >= HEADING_MIN_SPEED_MPS) {
-        headingDeg = bearingDeg({lat:lastFix.lat, lon:lastFix.lon}, {lat, lon});
-      }
-    }
-    lastFix = cur;
-  }
+        #startBtn,
+        #voiceBtn {
+            padding: 1rem 3rem;
+            font-size: 1.2rem;
+            background: #fff;
+            color: #000;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: opacity 0.2s;
+        }
 
-  function onPosErr(err) {
-    gpsPill.textContent = "GPS: fout";
-    gpsPill.style.borderColor = "#553";
-    statusEl.textContent = `Locatie fout: ${err.message}`;
-  }
+        #startBtn:active,
+        #voiceBtn:active {
+            opacity: 0.7;
+        }
 
-  // --------------------------
-  // HUD update loop
-  // --------------------------
-  let uiTimer = null;
-  function startUiLoop() {
-    if (uiTimer) clearInterval(uiTimer);
-    uiTimer = setInterval(updateHud, UPDATE_UI_MS);
-  }
+        #voiceBtn {
+            background: #333;
+            color: #fff;
+        }
 
-  function updateHud() {
-    if (!lastFix) {
-      arrowWrap.innerHTML = svgArrow("nofix");
-      metersEl.textContent = "-- m";
-      statusEl.textContent = "Wachten op GPS…";
-      return;
-    }
-    if (!routePts.length) {
-      arrowWrap.innerHTML = svgArrow("nofix");
-      metersEl.textContent = "-- m";
-      statusEl.textContent = "Route laden…";
-      return;
-    }
+        /* HUD Screen */
+        #hud {
+            display: none;
+            width: 100%;
+            height: 100%;
+            flex-direction: row;
+        }
 
-    wpIdx = Math.max(0, Math.min(wpIdx, routePts.length - 1));
-    const cur = {lat:lastFix.lat, lon:lastFix.lon};
-    let target = routePts[wpIdx];
-    let d = haversineM(cur, target);
+        #hud.active {
+            display: flex;
+        }
 
-    if (d <= ARRIVE_RADIUS_M && wpIdx < routePts.length - 1) {
-      wpIdx++;
-      target = routePts[wpIdx];
-      d = haversineM(cur, target);
-    }
+        /* Left Panel - Navigation Info */
+        #navPanel {
+            flex: 1;
+            background: #000;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 2rem;
+            position: relative;
+        }
 
-    let arrowType = "up";
-    if (headingDeg == null) {
-      arrowType = "up";
-    } else {
-      const b = bearingDeg(cur, target);
-      const delta = wrap180(b - headingDeg);
-      arrowType = deltaToArrow(delta);
-    }
-    arrowWrap.innerHTML = svgArrow(arrowType);
+        #maneuverSection {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 1.5rem;
+        }
 
-    let shown = d;
-    if (d > 500) shown = Math.round(d / 10) * 10;
-    else if (d > 80) shown = Math.round(d / 5) * 5;
-    else shown = Math.round(d);
-    metersEl.textContent = `${shown} m`;
+        #maneuverIcon {
+            width: 180px;
+            height: 180px;
+            fill: #fff;
+        }
 
-    const kmh = Math.max(0, Math.round(speedMps * 3.6));
+        #distance {
+            font-size: 4rem;
+            font-weight: 300;
+            letter-spacing: 0.05em;
+        }
 
-    const step = nearestStep(cur);
-    const street = step && step.name ? step.name : null;
-    const streetTxt = street ? ` • ${street}` : "";
+        #streetName {
+            font-size: 1.5rem;
+            color: #999;
+            text-align: center;
+            max-width: 90%;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
 
-    statusEl.textContent = `WP ${wpIdx+1}/${routePts.length} | ${kmh} km/h${streetTxt}`;
+        #statusSection {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            padding-top: 1rem;
+            border-top: 1px solid #222;
+        }
 
-    // Persist state every ~2s while navigating (prevents losing route on reload)
-    const now = Date.now();
-    if (now - lastStateSave > 2000) {
-      saveState();
-      lastStateSave = now;
-    }
+        #speedDisplay {
+            font-size: 3rem;
+            font-weight: 300;
+        }
 
-    // Map update
-    if (debugMapEnabled && map) {
-      const ll = [cur.lat, cur.lon];
-      if (!posMarker) {
-        posMarker = L.circleMarker(ll, {radius:6, color:"#fff", weight:2, fillOpacity:1});
-        posMarker.addTo(map);
-      } else posMarker.setLatLng(ll);
+        #speedUnit {
+            font-size: 1.5rem;
+            color: #666;
+            margin-left: 0.5rem;
+        }
 
-      if (wpMarker) wpMarker.setLatLng([target.lat, target.lon]);
-      map.panTo(ll, {animate:false});
-    }
-  }
+        #etaDisplay {
+            text-align: right;
+        }
 
-  // --------------------------
-  // Map
-  // --------------------------
-  function ensureMap() {
-    if (map) return;
-    map = L.map("map", { zoomControl:false });
+        #eta {
+            font-size: 1.8rem;
+            color: #999;
+        }
 
-    L.tileLayer(BW_TILES, { maxZoom: 19 }).addTo(map);
-    map.setView([52.0, 5.0], 12);
+        #remaining {
+            font-size: 1.2rem;
+            color: #666;
+            margin-top: 0.3rem;
+        }
 
-    setTimeout(() => { try { map.invalidateSize(true); } catch {} }, 120);
-  }
+        /* Right Panel - Map */
+        #mapPanel {
+            flex: 1;
+            position: relative;
+            background: #000;
+        }
 
-  function drawRouteOnMap(points) {
-    if (!debugMapEnabled) return;
-    ensureMap();
+        #map {
+            width: 100%;
+            height: 100%;
+            filter: grayscale(100%) contrast(1.2) brightness(0.4);
+        }
 
-    if (routeLine) routeLine.remove();
-    const latlngs = points.map(p => [p.lat, p.lon]);
-    routeLine = L.polyline(latlngs, {color:"#fff", weight:3, opacity:0.9});
-    routeLine.addTo(map);
+        .leaflet-container {
+            background: #000;
+        }
 
-    map.fitBounds(routeLine.getBounds(), {padding:[30,30]});
+        .leaflet-control-container {
+            display: none;
+        }
 
-    const tgt = points[Math.min(wpIdx, points.length-1)];
-    if (wpMarker) wpMarker.remove();
-    wpMarker = L.circleMarker([tgt.lat, tgt.lon], {radius:6, color:"#fff", weight:2, fillOpacity:1});
-    wpMarker.addTo(map);
+        /* Roundabout Icon */
+        .roundabout-icon {
+            position: relative;
+        }
 
-    setTimeout(() => { try { map.invalidateSize(true); } catch {} }, 120);
-  }
+        .roundabout-circle {
+            stroke: #fff;
+            stroke-width: 3;
+            fill: none;
+        }
 
-  // --------------------------
-  // UI actions
-  // --------------------------
-  function showHud() {
-    startScreen.classList.remove("active");
-    hudScreen.classList.add("active");
+        .roundabout-exit {
+            stroke: #fff;
+            stroke-width: 4;
+            fill: none;
+        }
 
-    mapPane.style.display = debugMapEnabled ? "block" : "none";
-    if (debugMapEnabled) ensureMap();
+        .roundabout-number {
+            fill: #fff;
+            font-size: 24px;
+            font-weight: bold;
+            text-anchor: middle;
+        }
 
-    applyStageTransform();
-    requestFullscreenBestEffort();
-    requestWakeLock();
+        /* Loading State */
+        .loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 1.5rem;
+            color: #666;
+        }
+    </style>
+</head>
 
-    // tap anywhere toggles mirror
-    hudScreen.onclick = () => toggleMirror();
-  }
+<body>
+    <div id="app">
+        <!-- Setup Screen -->
+        <div id="setup">
+            <h1>HEAD-UP NAVIGATOR</h1>
+            <input type="text" id="destinationInput" placeholder="Voer bestemming in...">
+            <button id="voiceBtn">🎤 Spreek bestemming in</button>
+            <button id="startBtn">Start navigatie</button>
+        </div>
 
-  function showStart() {
-    hudScreen.classList.remove("active");
-    startScreen.classList.add("active");
-    hudScreen.onclick = null;
-  }
+        <!-- HUD Screen -->
+        <div id="hud">
+            <div id="navPanel">
+                <div id="maneuverSection">
+                    <svg id="maneuverIcon" viewBox="0 0 100 100"></svg>
+                    <div id="distance">--</div>
+                    <div id="streetName">--</div>
+                </div>
+                <div id="statusSection">
+                    <div id="speedDisplay">
+                        <span id="speed">0</span><span id="speedUnit">km/h</span>
+                    </div>
+                    <div id="etaDisplay">
+                        <div id="eta">--:--</div>
+                        <div id="remaining">-- km</div>
+                    </div>
+                </div>
+            </div>
+            <div id="mapPanel">
+                <div id="map"></div>
+            </div>
+        </div>
+    </div>
 
-  function toggleMirror() {
-    mirrored = !mirrored;
-    applyStageTransform();
-    saveState();
-  }
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
-  function toggleQuarterTurn() {
-    quarterTurn = !quarterTurn;
-    applyStageTransform();
-    saveState();
-  }
+    <script>
+        'use strict';
 
-  function toggleMapPane() {
-    debugMapEnabled = !debugMapEnabled;
-    debugBtn.textContent = debugMapEnabled ? "Kaart: aan" : "Kaart: uit";
-    mapPane.style.display = (hudScreen.classList.contains("active") && debugMapEnabled) ? "block" : "none";
-    if (debugMapEnabled) ensureMap();
-    applyStageTransform();
-    saveState();
-  }
+        // ============================================================================
+        // STATE MANAGEMENT
+        // ============================================================================
 
-  // SpeechRecognition
-  function speechSupported() {
-    return ("webkitSpeechRecognition" in window) || ("SpeechRecognition" in window);
-  }
+        const State = {
+            route: null,
+            currentStepIndex: 0,
+            position: null,
+            heading: 0,
+            speed: 0,
+            destination: null,
+            eta: null,
+            remainingDistance: 0,
 
-  function startSpeech() {
-    if (!speechSupported()) {
-      startStatus.textContent = "Spraak niet ondersteund in deze browser. Typ het adres.";
-      return;
-    }
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    const rec = new SR();
-    rec.lang = "nl-NL";
-    rec.interimResults = false;
-    rec.maxAlternatives = 1;
+            save() {
+                localStorage.setItem('hudNav', JSON.stringify({
+                    route: this.route,
+                    currentStepIndex: this.currentStepIndex,
+                    destination: this.destination,
+                    heading: this.heading
+                }));
+            },
 
-    voiceBtn.textContent = "🎙 Luisteren…";
-    startStatus.textContent = "Spreek nu het adres…";
+            restore() {
+                const saved = localStorage.getItem('hudNav');
+                if (saved) {
+                    const data = JSON.parse(saved);
+                    this.route = data.route;
+                    this.currentStepIndex = data.currentStepIndex;
+                    this.destination = data.destination;
+                    this.heading = data.heading || 0;
+                    return true;
+                }
+                return false;
+            },
 
-    rec.onresult = (e) => {
-      const txt = e.results[0][0].transcript;
-      addrInput.value = txt;
-      startStatus.textContent = `Herkenning: "${txt}" (pas aan indien nodig)`;
-      saveState();
-    };
-    rec.onerror = (e) => {
-      startStatus.textContent = `Spraakfout: ${e.error}. Typ het adres.`;
-    };
-    rec.onend = () => {
-      voiceBtn.textContent = "🎙 Spreek adres";
-    };
-    rec.start();
-  }
+            clear() {
+                localStorage.removeItem('hudNav');
+                this.route = null;
+                this.currentStepIndex = 0;
+                this.destination = null;
+            }
+        };
 
-  async function startNavigation() {
-    const q = addrInput.value.trim();
-    if (!q) { startStatus.textContent = "Vul of spreek eerst een adres in."; return; }
+        // ============================================================================
+        // GPS & HEADING
+        // ============================================================================
 
-    startBtn.disabled = true;
-    startBtn.textContent = "Bezig…";
-    startStatus.textContent = "Locatie opvragen… (sta toe in je browser)";
-    gpsPill.textContent = "GPS: …";
+        class LocationTracker {
+            constructor() {
+                this.watchId = null;
+                this.lastPosition = null;
+                this.speedBuffer = [];
+                this.headingBuffer = [];
+                this.compassHeading = 0;
+                this.minSpeedForGPSHeading = 2; // m/s (~7 km/h)
+            }
 
-    try {
-      startWatch();
-      await waitForFix(12000);
-      const start = {lat:lastFix.lat, lon:lastFix.lon};
+            start(callback) {
+                if ('geolocation' in navigator) {
+                    this.watchId = navigator.geolocation.watchPosition(
+                        (pos) => this.handlePosition(pos, callback),
+                        (err) => console.error('GPS error:', err),
+                        {
+                            enableHighAccuracy: true,
+                            maximumAge: 1000,
+                            timeout: 5000
+                        }
+                    );
+                }
 
-      startStatus.textContent = "Adres zoeken…";
-      const dest = await geocodeAddress(q);
+                if (window.DeviceOrientationEvent) {
+                    window.addEventListener('deviceorientationabsolute', (e) => {
+                        if (e.absolute && e.alpha !== null) {
+                            this.compassHeading = e.alpha;
+                        }
+                    });
 
-      startStatus.textContent = "Route berekenen…";
-      const rawRoute = await fetchOsrmRoute(start, dest);
+                    window.addEventListener('deviceorientation', (e) => {
+                        if (e.alpha !== null && this.compassHeading === 0) {
+                            this.compassHeading = e.alpha;
+                        }
+                    });
+                }
+            }
 
-      routePts = resampleRoute(rawRoute, LOOKAHEAD_STEP_M);
-      wpIdx = 0;
+            handlePosition(pos, callback) {
+                const current = {
+                    lat: pos.coords.latitude,
+                    lng: pos.coords.longitude,
+                    accuracy: pos.coords.accuracy,
+                    speed: pos.coords.speed || 0
+                };
 
-      saveState();
+                // Calculate speed
+                let speed = current.speed;
+                if (this.lastPosition && !speed) {
+                    const dist = this.distance(this.lastPosition, current);
+                    const time = (pos.timestamp - this.lastPosition.timestamp) / 1000;
+                    speed = time > 0 ? dist / time : 0;
+                }
 
-      showHud();
-      drawRouteOnMap(routePts);
-      startUiLoop();
+                this.speedBuffer.push(speed);
+                if (this.speedBuffer.length > 5) this.speedBuffer.shift();
+                const avgSpeed = this.speedBuffer.reduce((a, b) => a + b, 0) / this.speedBuffer.length;
 
-    } catch (e) {
-      startStatus.textContent = `Fout: ${e.message || e}`;
-      try { stopWatch(); } catch {}
-    } finally {
-      startBtn.disabled = false;
-      startBtn.textContent = "Start navigatie";
-    }
-  }
+                // Calculate heading
+                let heading = this.compassHeading;
+                if (this.lastPosition && avgSpeed > this.minSpeedForGPSHeading) {
+                    heading = this.bearing(this.lastPosition, current);
+                }
 
-  function waitForFix(ms) {
-    return new Promise((resolve, reject) => {
-      const t0 = Date.now();
-      const it = setInterval(() => {
-        if (lastFix) { clearInterval(it); resolve(true); }
-        else if (Date.now() - t0 > ms) { clearInterval(it); reject(new Error("Geen GPS fix ontvangen.")); }
-      }, 250);
-    });
-  }
+                this.headingBuffer.push(heading);
+                if (this.headingBuffer.length > 3) this.headingBuffer.shift();
+                const avgHeading = this.averageAngle(this.headingBuffer);
 
-  function stopAll() {
-    stopWatch();
-    releaseWakeLock();
+                this.lastPosition = { ...current, timestamp: pos.timestamp };
 
-    routePts = [];
-    routeSteps = [];
-    wpIdx = 0;
-    headingDeg = null;
-    lastFix = null;
-    speedMps = 0;
+                callback({
+                    position: current,
+                    speed: avgSpeed,
+                    heading: avgHeading
+                });
+            }
 
-    if (uiTimer) clearInterval(uiTimer);
-    uiTimer = null;
+            distance(p1, p2) {
+                const R = 6371e3;
+                const φ1 = p1.lat * Math.PI / 180;
+                const φ2 = p2.lat * Math.PI / 180;
+                const Δφ = (p2.lat - p1.lat) * Math.PI / 180;
+                const Δλ = (p2.lng - p1.lng) * Math.PI / 180;
 
-    // Clear persisted state (fresh start)
-    clearState();
+                const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+                    Math.cos(φ1) * Math.cos(φ2) *
+                    Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+                const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 
-    showStart();
-    startStatus.textContent = "Gestopt. Je kunt een nieuw adres spreken of typen.";
-  }
+                return R * c;
+            }
 
-  // --------------------------
-  // Wire up buttons
-  // --------------------------
-  voiceBtn.addEventListener("click", startSpeech);
-  startBtn.addEventListener("click", startNavigation);
-  debugBtn.addEventListener("click", toggleMapPane);
+            bearing(p1, p2) {
+                const φ1 = p1.lat * Math.PI / 180;
+                const φ2 = p2.lat * Math.PI / 180;
+                const Δλ = (p2.lng - p1.lng) * Math.PI / 180;
 
-  rotToggle.addEventListener("click", (e) => { e.stopPropagation(); toggleQuarterTurn(); });
-  mapToggle.addEventListener("click", (e) => { e.stopPropagation(); toggleMapPane(); });
-  stopBtn.addEventListener("click", (e) => { e.stopPropagation(); stopAll(); });
+                const y = Math.sin(Δλ) * Math.cos(φ2);
+                const x = Math.cos(φ1) * Math.sin(φ2) -
+                    Math.sin(φ1) * Math.cos(φ2) * Math.cos(Δλ);
+                const θ = Math.atan2(y, x);
 
-  // Long press to stop
-  let lpTimer = null;
-  hudScreen.addEventListener("touchstart", () => { lpTimer = setTimeout(() => stopAll(), 900); }, {passive:true});
-  hudScreen.addEventListener("touchend", () => { if (lpTimer) clearTimeout(lpTimer); lpTimer = null; }, {passive:true});
+                return (θ * 180 / Math.PI + 360) % 360;
+            }
 
-  // --------------------------
-  // Restore previous session if available
-  // --------------------------
-  const restored = loadState();
-  if (restored) {
-    routePts = restored.routePts;
-    routeSteps = restored.routeSteps || [];
-    wpIdx = Math.max(0, Math.min(restored.wpIdx || 0, routePts.length - 1));
-    addrInput.value = restored.addr || "";
-    debugMapEnabled = !!restored.debugMapEnabled;
-    mirrored = !!restored.mirrored;
-    quarterTurn = !!restored.quarterTurn;
+            averageAngle(angles) {
+                let x = 0, y = 0;
+                angles.forEach(a => {
+                    x += Math.cos(a * Math.PI / 180);
+                    y += Math.sin(a * Math.PI / 180);
+                });
+                return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+            }
 
-    debugBtn.textContent = debugMapEnabled ? "Kaart: aan" : "Kaart: uit";
-    applyStageTransform();
+            stop() {
+                if (this.watchId) {
+                    navigator.geolocation.clearWatch(this.watchId);
+                }
+            }
+        }
 
-    // If we have a route, resume HUD
-    try {
-      startWatch();
-      showHud();
-      if (debugMapEnabled) {
-        mapPane.style.display = "block";
-        drawRouteOnMap(routePts);
-      }
-      startUiLoop();
-      startStatus.textContent = "Vorige sessie hersteld.";
-    } catch {}
-  } else {
-    startStatus.textContent = speechSupported()
-      ? "Tip: Spreek adres. Sta locatie toe. In HUD: tik = spiegeling, ⤾ = kwartslag, 🗺 = kaart."
-      : "Spraak niet ondersteund in deze browser. Typ het adres. Sta locatie toe.";
-  }
+        // ============================================================================
+        // ROUTING
+        // ============================================================================
 
-  applyStageTransform();
-})();
-</script>
+        class Router {
+            async geocode(query) {
+                const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&countrycodes=nl&limit=1`;
+                const res = await fetch(url);
+                const data = await res.json();
+                if (data.length === 0) throw new Error('Bestemming niet gevonden');
+                return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
+            }
+
+            async getRoute(from, to) {
+                const url = `https://router.project-osrm.org/route/v1/driving/${from.lng},${from.lat};${to.lng},${to.lat}?overview=full&geometries=geojson&steps=true`;
+                const res = await fetch(url);
+                const data = await res.json();
+                if (data.code !== 'Ok') throw new Error('Route niet gevonden');
+                return data.routes[0];
+            }
+        }
+
+        // ============================================================================
+        // UI RENDERING
+        // ============================================================================
+
+        class HUD {
+            constructor() {
+                this.maneuverIcon = document.getElementById('maneuverIcon');
+                this.distance = document.getElementById('distance');
+                this.streetName = document.getElementById('streetName');
+                this.speed = document.getElementById('speed');
+                this.eta = document.getElementById('eta');
+                this.remaining = document.getElementById('remaining');
+                this.lastUpdate = 0;
+                this.updateThrottle = 500; // ms
+            }
+
+            update(data) {
+                const now = Date.now();
+                if (now - this.lastUpdate < this.updateThrottle) return;
+                this.lastUpdate = now;
+
+                if (data.maneuver) {
+                    this.renderManeuver(data.maneuver);
+                }
+
+                if (data.distance !== undefined) {
+                    this.distance.textContent = data.distance < 1000
+                        ? `${Math.round(data.distance)} m`
+                        : `${(data.distance / 1000).toFixed(1)} km`;
+                }
+
+                if (data.street) {
+                    this.streetName.textContent = data.street;
+                }
+
+                if (data.speed !== undefined && data.speed > 1) {
+                    this.speed.textContent = Math.round(data.speed * 3.6);
+                } else {
+                    this.speed.textContent = '0';
+                }
+
+                if (data.eta) {
+                    const etaDate = new Date(Date.now() + data.eta * 1000);
+                    this.eta.textContent = `${String(etaDate.getHours()).padStart(2, '0')}:${String(etaDate.getMinutes()).padStart(2, '0')}`;
+                }
+
+                if (data.remaining !== undefined) {
+                    this.remaining.textContent = `${(data.remaining / 1000).toFixed(1)} km`;
+                }
+            }
+
+            renderManeuver(maneuver) {
+                const type = maneuver.type;
+                const modifier = maneuver.modifier || '';
+
+                if (type === 'roundabout' || type === 'rotary') {
+                    this.renderRoundabout(maneuver);
+                } else {
+                    this.renderArrow(type, modifier);
+                }
+            }
+
+            renderArrow(type, modifier) {
+                let path = '';
+
+                if (type === 'arrive') {
+                    path = '<circle cx="50" cy="50" r="20" fill="none" stroke="#fff" stroke-width="3"/><circle cx="50" cy="50" r="10" fill="#fff"/>';
+                } else if (modifier.includes('straight')) {
+                    path = '<path d="M50 20 L50 80 M35 30 L50 20 L65 30" stroke="#fff" stroke-width="3" fill="none"/>';
+                } else if (modifier.includes('right')) {
+                    const sharp = modifier.includes('sharp');
+                    path = sharp
+                        ? '<path d="M30 70 L30 40 Q30 30 40 30 L70 30 M60 20 L70 30 L60 40" stroke="#fff" stroke-width="3" fill="none"/>'
+                        : '<path d="M30 70 L30 45 Q30 30 45 30 L70 30 M60 25 L70 30 L60 35" stroke="#fff" stroke-width="3" fill="none"/>';
+                } else if (modifier.includes('left')) {
+                    const sharp = modifier.includes('sharp');
+                    path = sharp
+                        ? '<path d="M70 70 L70 40 Q70 30 60 30 L30 30 M40 20 L30 30 L40 40" stroke="#fff" stroke-width="3" fill="none"/>'
+                        : '<path d="M70 70 L70 45 Q70 30 55 30 L30 30 M40 25 L30 30 L40 35" stroke="#fff" stroke-width="3" fill="none"/>';
+                } else {
+                    path = '<path d="M50 20 L50 80 M35 30 L50 20 L65 30" stroke="#fff" stroke-width="3" fill="none"/>';
+                }
+
+                this.maneuverIcon.innerHTML = path;
+            }
+
+            renderRoundabout(maneuver) {
+                const exit = maneuver.exit || 1;
+                const totalExits = Math.max(exit + 2, 4);
+
+                let svg = '<circle cx="50" cy="50" r="25" class="roundabout-circle"/>';
+
+                for (let i = 1; i <= totalExits; i++) {
+                    const angle = (i / totalExits) * 360 - 90;
+                    const rad = angle * Math.PI / 180;
+                    const x1 = 50 + Math.cos(rad) * 25;
+                    const y1 = 50 + Math.sin(rad) * 25;
+                    const x2 = 50 + Math.cos(rad) * 40;
+                    const y2 = 50 + Math.sin(rad) * 40;
+
+                    const strokeWidth = i === exit ? 6 : 3;
+                    const opacity = i === exit ? 1 : 0.5;
+
+                    svg += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" class="roundabout-exit" stroke-width="${strokeWidth}" opacity="${opacity}"/>`;
+                }
+
+                svg += `<text x="50" y="58" class="roundabout-number">${exit}</text>`;
+
+                this.maneuverIcon.innerHTML = svg;
+            }
+        }
+
+        // ============================================================================
+        // MAP
+        // ============================================================================
+
+        class MapView {
+            constructor() {
+                this.map = null;
+                this.routeLayer = null;
+                this.positionMarker = null;
+            }
+
+            init() {
+                this.map = L.map('map', {
+                    zoomControl: false,
+                    attributionControl: false,
+                    dragging: false,
+                    touchZoom: false,
+                    scrollWheelZoom: false,
+                    doubleClickZoom: false,
+                    boxZoom: false,
+                    keyboard: false
+                }).setView([52.0907, 5.1214], 13);
+
+                L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png', {
+                    maxZoom: 19
+                }).addTo(this.map);
+            }
+
+            setRoute(route) {
+                if (this.routeLayer) {
+                    this.map.removeLayer(this.routeLayer);
+                }
+
+                const coords = route.geometry.coordinates.map(c => [c[1], c[0]]);
+                this.routeLayer = L.polyline(coords, {
+                    color: '#fff',
+                    weight: 3,
+                    opacity: 0.6
+                }).addTo(this.map);
+
+                this.map.fitBounds(this.routeLayer.getBounds());
+            }
+
+            updatePosition(lat, lng, heading) {
+                if (!this.positionMarker) {
+                    this.positionMarker = L.circleMarker([lat, lng], {
+                        radius: 8,
+                        color: '#fff',
+                        fillColor: '#fff',
+                        fillOpacity: 1,
+                        weight: 2
+                    }).addTo(this.map);
+                } else {
+                    this.positionMarker.setLatLng([lat, lng]);
+                }
+
+                this.map.setView([lat, lng], 16, { animate: false });
+
+                const mapContainer = this.map.getContainer();
+                mapContainer.style.transform = `rotate(${-heading}deg)`;
+            }
+        }
+
+        // ============================================================================
+        // NAVIGATION ENGINE
+        // ============================================================================
+
+        class NavigationEngine {
+            constructor() {
+                this.tracker = new LocationTracker();
+                this.router = new Router();
+                this.hud = new HUD();
+                this.mapView = new MapView();
+                this.longPressTimer = null;
+            }
+
+            async start(destination) {
+                try {
+                    // Get current position
+                    const pos = await this.getCurrentPosition();
+                    State.position = pos;
+
+                    // Geocode destination
+                    const dest = await this.router.geocode(destination);
+                    State.destination = dest;
+
+                    // Get route
+                    const route = await this.router.getRoute(pos, dest);
+                    State.route = route;
+                    State.currentStepIndex = 0;
+                    State.save();
+
+                    // Initialize map
+                    this.mapView.init();
+                    this.mapView.setRoute(route);
+
+                    // Start tracking
+                    this.tracker.start((data) => this.handleLocationUpdate(data));
+
+                    // Enable wake lock
+                    this.requestWakeLock();
+
+                    // Setup long-press to stop
+                    this.setupLongPress();
+
+                    // Show HUD
+                    document.getElementById('setup').style.display = 'none';
+                    document.getElementById('hud').classList.add('active');
+
+                } catch (err) {
+                    alert('Fout bij starten navigatie: ' + err.message);
+                }
+            }
+
+            getCurrentPosition() {
+                return new Promise((resolve, reject) => {
+                    navigator.geolocation.getCurrentPosition(
+                        (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+                        (err) => reject(err),
+                        { enableHighAccuracy: true, timeout: 10000 }
+                    );
+                });
+            }
+
+            handleLocationUpdate(data) {
+                State.position = data.position;
+                State.speed = data.speed;
+                State.heading = data.heading;
+                State.save();
+
+                if (!State.route) return;
+
+                // Find current step
+                const step = this.findCurrentStep(data.position);
+                if (step) {
+                    const distToManeuver = this.distanceToPoint(data.position, step.maneuver.location);
+                    const totalRemaining = this.calculateRemainingDistance(data.position);
+                    const eta = data.speed > 0 ? totalRemaining / data.speed : null;
+
+                    this.hud.update({
+                        maneuver: step.maneuver,
+                        distance: distToManeuver,
+                        street: step.name || 'Naamloze weg',
+                        speed: data.speed,
+                        eta: eta,
+                        remaining: totalRemaining
+                    });
+                }
+
+                this.mapView.updatePosition(data.position.lat, data.position.lng, data.heading);
+            }
+
+            findCurrentStep(position) {
+                if (!State.route || !State.route.legs) return null;
+
+                const steps = State.route.legs[0].steps;
+                let minDist = Infinity;
+                let currentStep = null;
+                let currentIndex = State.currentStepIndex;
+
+                for (let i = currentIndex; i < steps.length; i++) {
+                    const step = steps[i];
+                    const dist = this.distanceToPoint(position, step.maneuver.location);
+
+                    if (dist < minDist) {
+                        minDist = dist;
+                        currentStep = step;
+                        currentIndex = i;
+                    }
+
+                    if (dist < 20) {
+                        State.currentStepIndex = Math.min(i + 1, steps.length - 1);
+                        State.save();
+                        break;
+                    }
+                }
+
+                return currentStep || steps[currentIndex];
+            }
+
+            distanceToPoint(pos, point) {
+                const R = 6371e3;
+                const φ1 = pos.lat * Math.PI / 180;
+                const φ2 = point[1] * Math.PI / 180;
+                const Δφ = (point[1] - pos.lat) * Math.PI / 180;
+                const Δλ = (point[0] - pos.lng) * Math.PI / 180;
+
+                const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+                    Math.cos(φ1) * Math.cos(φ2) *
+                    Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+                const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+                return R * c;
+            }
+
+            calculateRemainingDistance(position) {
+                if (!State.route || !State.route.legs) return 0;
+
+                const steps = State.route.legs[0].steps;
+                let total = 0;
+
+                for (let i = State.currentStepIndex; i < steps.length; i++) {
+                    total += steps[i].distance;
+                }
+
+                return total;
+            }
+
+            setupLongPress() {
+                const hud = document.getElementById('hud');
+
+                hud.addEventListener('touchstart', (e) => {
+                    this.longPressTimer = setTimeout(() => {
+                        if (confirm('Navigatie stoppen?')) {
+                            this.stop();
+                        }
+                    }, 2000);
+                });
+
+                hud.addEventListener('touchend', () => {
+                    clearTimeout(this.longPressTimer);
+                });
+
+                hud.addEventListener('touchmove', () => {
+                    clearTimeout(this.longPressTimer);
+                });
+            }
+
+            async requestWakeLock() {
+                try {
+                    if ('wakeLock' in navigator) {
+                        const wakeLock = await navigator.wakeLock.request('screen');
+
+                        document.addEventListener('visibilitychange', async () => {
+                            if (document.visibilityState === 'visible') {
+                                await navigator.wakeLock.request('screen');
+                            }
+                        });
+                    }
+                } catch (err) {
+                    console.warn('Wake Lock not supported:', err);
+                }
+            }
+
+            stop() {
+                this.tracker.stop();
+                State.clear();
+                document.getElementById('hud').classList.remove('active');
+                document.getElementById('setup').style.display = 'flex';
+                location.reload();
+            }
+        }
+
+        // ============================================================================
+        // APP INITIALIZATION
+        // ============================================================================
+
+        const nav = new NavigationEngine();
+
+        // Voice input
+        document.getElementById('voiceBtn').addEventListener('click', () => {
+            if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+                alert('Spraakherkenning niet ondersteund');
+                return;
+            }
+
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            const recognition = new SpeechRecognition();
+            recognition.lang = 'nl-NL';
+            recognition.continuous = false;
+
+            recognition.onresult = (event) => {
+                const transcript = event.results[0][0].transcript;
+                document.getElementById('destinationInput').value = transcript;
+            };
+
+            recognition.onerror = (event) => {
+                alert('Spraakherkenning fout: ' + event.error);
+            };
+
+            recognition.start();
+        });
+
+        // Start navigation
+        document.getElementById('startBtn').addEventListener('click', () => {
+            const dest = document.getElementById('destinationInput').value.trim();
+            if (!dest) {
+                alert('Voer een bestemming in');
+                return;
+            }
+            nav.start(dest);
+        });
+
+        // Enter key to start
+        document.getElementById('destinationInput').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                document.getElementById('startBtn').click();
+            }
+        });
+
+        // Restore session
+        if (State.restore() && State.route) {
+            if (confirm('Vorige navigatie hervatten?')) {
+                nav.start(State.destination.lat + ',' + State.destination.lng);
+            } else {
+                State.clear();
+            }
+        }
+
+        // Force landscape
+        if (screen.orientation && screen.orientation.lock) {
+            screen.orientation.lock('landscape').catch(() => { });
+        }
+
+        // Prevent sleep
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible' && State.route) {
+                State.save();
+            }
+        });
+    </script>
 </body>
+
 </html>
