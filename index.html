@@ -26,7 +26,6 @@
       -webkit-tap-highlight-color: transparent;
     }
 
-    /* Use dvh to avoid mobile URL-bar "jump" */
     .screen{ display:none; height:100dvh; width:100vw; }
     .screen.active{ display:flex; }
 
@@ -91,7 +90,6 @@
     #hudStage{
       position:absolute;
       inset:0;
-      display:block;
       z-index:1;
     }
 
@@ -104,18 +102,49 @@
       height:100%;
       transform: translate(-50%, -50%) rotate(var(--rot, 0deg)) scaleX(var(--mx, 1));
       transform-origin: center;
+    }
+
+    /* When quarter-turn: swap width/height to fit */
+    #hud.quarterturn #hudStageInner{
+      width:100dvh;
+      height:100vw;
+    }
+
+    /* ----- Map as BACKGROUND layer (always behind HUD content) ----- */
+    #mapPane{
+      position:absolute;
+      inset:0;
+      background:#000;
+      z-index:0;              /* <- behind */
+      display:none;
+      overflow:hidden;
+    }
+    #map{
+      width:100%;
+      height:100%;
+      /* Force black/white even if tiles are colored */
+      filter: grayscale(1) contrast(1.25) brightness(0.85);
+      transform: translateZ(0);
+    }
+    /* optional dim overlay so HUD stays readable */
+    #mapDim{
+      position:absolute;
+      inset:0;
+      background: rgba(0,0,0,0.45);
+      pointer-events:none;
+    }
+
+    /* ----- HUD content layer (always on top) ----- */
+    #hudContent{
+      position:absolute;
+      inset:0;
+      z-index:2;              /* <- above map */
       display:flex;
       flex-direction:column;
       align-items:center;
       justify-content:center;
       gap:10px;
-      pointer-events:none; /* clicks go to hud container unless overridden */
-    }
-
-    /* When quarter-turn: swap width/height to fit */
-    #hud.quarterturn #hudStageInner{
-      width:100dvh;   /* swapped */
-      height:100vw;   /* swapped */
+      pointer-events:none;    /* tap goes to parent (mirror) */
     }
 
     #arrowWrap{
@@ -138,7 +167,7 @@
       max-width:min(92vw, 680px);
     }
 
-    /* Top bar sits above the transformed stage (still readable) */
+    /* Top bar above everything */
     #topBar{
       position:absolute;
       top: env(safe-area-inset-top);
@@ -164,23 +193,6 @@
     .pill.muted{ color:var(--muted); }
     #mapToggle, #rotToggle{ cursor:pointer; }
 
-    /* Map pane lives inside stage so it rotates/mirrors too */
-    #mapPane{
-      position:absolute;
-      right:10px;
-      bottom: calc(10px + env(safe-area-inset-bottom));
-      width:min(40vw, 360px);
-      height:min(28dvh, 240px);
-      border:1px solid #2a2a2a;
-      border-radius:16px;
-      overflow:hidden;
-      background:#000;
-      display:none;
-      z-index:5;
-      pointer-events:auto; /* allow map rendering properly */
-    }
-    #map{ width:100%; height:100%; }
-
     /* Leaflet minimal */
     .leaflet-control-attribution, .leaflet-control-zoom{ display:none !important; }
   </style>
@@ -202,9 +214,7 @@
     <button id="debugBtn">Kaart: aan</button>
   </div>
 
-  <div id="startStatus" class="small">
-    Tip: Zet helderheid hoog. Sta locatie toe. In HUD: tik = spiegeling.
-  </div>
+  <div id="startStatus" class="small">Tip: Sta locatie toe. In HUD: tik = spiegeling.</div>
 </div>
 
 <div id="hud" class="screen">
@@ -217,10 +227,20 @@
 
   <div id="hudStage">
     <div id="hudStageInner">
-      <div id="arrowWrap"></div>
-      <div id="meters">-- m</div>
-      <div id="status">Wachten…</div>
-      <div id="mapPane"><div id="map"></div></div>
+
+      <!-- Map background -->
+      <div id="mapPane">
+        <div id="map"></div>
+        <div id="mapDim"></div>
+      </div>
+
+      <!-- HUD foreground -->
+      <div id="hudContent">
+        <div id="arrowWrap"></div>
+        <div id="meters">-- m</div>
+        <div id="status">Wachten…</div>
+      </div>
+
     </div>
   </div>
 </div>
@@ -228,7 +248,7 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
 (() => {
-  // Service worker (PWA)
+  // PWA SW
   if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("./sw.js").catch(() => {});
   }
@@ -236,15 +256,14 @@
   // --------------------------
   // Config
   // --------------------------
-  const OSRM_BASE = "https://router.project-osrm.org"; // public demo; fair use
+  const OSRM_BASE = "https://router.project-osrm.org";
   const NOMINATIM = "https://nominatim.openstreetmap.org/search";
-  const ARRIVE_RADIUS_M = 80;      // auto
-  const LOOKAHEAD_STEP_M = 60;     // resample route -> waypoints (m)
-  const HEADING_MIN_SPEED_MPS = 4; // ~14 km/h
+  const ARRIVE_RADIUS_M = 80;
+  const LOOKAHEAD_STEP_M = 60;
+  const HEADING_MIN_SPEED_MPS = 4;
   const UPDATE_UI_MS = 500;
 
-  // Zwart-wit tiles (gratis)
-  // Let op: dit is een B/W rendering van OSM-data.
+  // Zwart-wit tiles (gratis). Als deze ooit traag is, blijft CSS filter nog steeds B/W afdwingen.
   const BW_TILES = "https://tiles.wmflabs.org/bw-mapnik/{z}/{x}/{y}.png";
 
   // --------------------------
@@ -272,17 +291,15 @@
   // State
   // --------------------------
   let debugMapEnabled = true;
-
-  // Transform state (applies to HUD + map together)
   let mirrored = false;
   let quarterTurn = false;
 
   let watchId = null;
-  let lastFix = null; // {lat, lon, ts}
+  let lastFix = null;
   let headingDeg = null;
   let speedMps = 0;
 
-  let routePts = [];  // [{lat, lon}]
+  let routePts = [];
   let wpIdx = 0;
 
   // Leaflet
@@ -292,16 +309,12 @@
   // Helpers
   // --------------------------
   function applyStageTransform() {
-    // Use CSS vars on HUD screen
     hudScreen.style.setProperty("--mx", mirrored ? -1 : 1);
     hudScreen.style.setProperty("--rot", quarterTurn ? "90deg" : "0deg");
     hudScreen.classList.toggle("quarterturn", quarterTurn);
 
-    // Leaflet needs a nudge after transforms / show/hide
     if (debugMapEnabled && map) {
-      setTimeout(() => {
-        try { map.invalidateSize(true); } catch {}
-      }, 50);
+      setTimeout(() => { try { map.invalidateSize(true); } catch {} }, 80);
     }
   }
 
@@ -412,9 +425,7 @@
   // --------------------------
   async function geocodeAddress(q) {
     const url = `${NOMINATIM}?format=json&limit=1&q=${encodeURIComponent(q)}`;
-    const r = await fetch(url, {
-      headers: { "Accept": "application/json", "User-Agent": "HUD-Navigator-Demo" }
-    });
+    const r = await fetch(url, { headers: { "Accept": "application/json" } });
     const data = await r.json();
     if (!data || !data[0]) throw new Error("Adres niet gevonden.");
     return { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon) };
@@ -425,7 +436,7 @@
     const r = await fetch(url);
     const data = await r.json();
     if (!data || data.code !== "Ok") throw new Error("OSRM route faalde.");
-    const coords = data.routes[0].geometry.coordinates; // [lon,lat]
+    const coords = data.routes[0].geometry.coordinates;
     return coords.map(c => ({ lon: c[0], lat: c[1] }));
   }
 
@@ -511,7 +522,6 @@
       const delta = wrap180(b - headingDeg);
       arrowType = deltaToArrow(delta);
     }
-
     arrowWrap.innerHTML = svgArrow(arrowType);
 
     let shown = d;
@@ -526,7 +536,7 @@
     if (debugMapEnabled && map) {
       const ll = [cur.lat, cur.lon];
       if (!posMarker) {
-        posMarker = L.circleMarker(ll, {radius:6});
+        posMarker = L.circleMarker(ll, {radius:6, color:"#fff", weight:2, fillOpacity:1});
         posMarker.addTo(map);
       } else posMarker.setLatLng(ll);
 
@@ -542,33 +552,29 @@
     if (map) return;
     map = L.map("map", { zoomControl:false });
 
-    // Zwart-wit tiles
-    L.tileLayer(BW_TILES, {
-      maxZoom: 19,
-      attribution: "© OpenStreetMap contributors"
-    }).addTo(map);
-
+    L.tileLayer(BW_TILES, { maxZoom: 19 }).addTo(map);
     map.setView([52.0, 5.0], 12);
 
-    // after init, ensure proper sizing
-    setTimeout(() => { try { map.invalidateSize(true); } catch {} }, 50);
+    setTimeout(() => { try { map.invalidateSize(true); } catch {} }, 120);
   }
 
   function drawRouteOnMap(points) {
     if (!debugMapEnabled) return;
     ensureMap();
+
     if (routeLine) routeLine.remove();
     const latlngs = points.map(p => [p.lat, p.lon]);
-    routeLine = L.polyline(latlngs);
+    routeLine = L.polyline(latlngs, {color:"#fff", weight:3, opacity:0.9});
     routeLine.addTo(map);
-    map.fitBounds(routeLine.getBounds(), {padding:[20,20]});
+
+    map.fitBounds(routeLine.getBounds(), {padding:[30,30]});
 
     const tgt = points[Math.min(wpIdx, points.length-1)];
     if (wpMarker) wpMarker.remove();
-    wpMarker = L.circleMarker([tgt.lat, tgt.lon], {radius:6});
+    wpMarker = L.circleMarker([tgt.lat, tgt.lon], {radius:6, color:"#fff", weight:2, fillOpacity:1});
     wpMarker.addTo(map);
 
-    setTimeout(() => { try { map.invalidateSize(true); } catch {} }, 50);
+    setTimeout(() => { try { map.invalidateSize(true); } catch {} }, 120);
   }
 
   // --------------------------
@@ -584,7 +590,7 @@
     applyStageTransform();
     requestFullscreenBestEffort();
 
-    // tap anywhere toggles mirror (HUD reflection)
+    // tap anywhere toggles mirror
     hudScreen.onclick = () => toggleMirror();
   }
 
@@ -647,10 +653,8 @@
 
   async function startNavigation() {
     const q = addrInput.value.trim();
-    if (!q) {
-      startStatus.textContent = "Vul of spreek eerst een adres in.";
-      return;
-    }
+    if (!q) { startStatus.textContent = "Vul of spreek eerst een adres in."; return; }
+
     startStatus.textContent = "Locatie opvragen… (sta toe in je browser)";
     gpsPill.textContent = "GPS: …";
 
@@ -714,22 +718,14 @@
 
   // Long press to stop
   let lpTimer = null;
-  hudScreen.addEventListener("touchstart", () => {
-    lpTimer = setTimeout(() => stopAll(), 900);
-  }, {passive:true});
-  hudScreen.addEventListener("touchend", () => {
-    if (lpTimer) clearTimeout(lpTimer);
-    lpTimer = null;
-  }, {passive:true});
+  hudScreen.addEventListener("touchstart", () => { lpTimer = setTimeout(() => stopAll(), 900); }, {passive:true});
+  hudScreen.addEventListener("touchend", () => { if (lpTimer) clearTimeout(lpTimer); lpTimer = null; }, {passive:true});
 
-  // initial status
   startStatus.textContent = speechSupported()
     ? "Tip: Spreek adres. Sta locatie toe. In HUD: tik = spiegeling, ⤾ = kwartslag, 🗺 = kaart."
     : "Spraak niet ondersteund in deze browser. Typ het adres. Sta locatie toe.";
 
-  // init transforms
   applyStageTransform();
-
 })();
 </script>
 </body>
