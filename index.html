@@ -2,987 +2,1241 @@
 <html lang="nl">
 
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport"
-        content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <meta name="mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="theme-color" content="#000000">
-    <meta name="format-detection" content="telephone=no">
-    <title>Head-Up Navigator</title>
-    <link rel="manifest"
-        href="data:application/json;base64,eyJuYW1lIjoiSGVhZC1VcCBOYXZpZ2F0b3IiLCJzaG9ydF9uYW1lIjoiSFVEIE5hdiIsInN0YXJ0X3VybCI6Ii8iLCJkaXNwbGF5IjoiZnVsbHNjcmVlbiIsImJhY2tncm91bmRfY29sb3IiOiIjMDAwMDAwIiwidGhlbWVfY29sb3IiOiIjMDAwMDAwIiwib3JpZW50YXRpb24iOiJsYW5kc2NhcGUiLCJpY29ucyI6W3sic3JjIjoiZGF0YTppbWFnZS9zdmcreG1sLCUzQ3N2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHZpZXdCb3g9JzAgMCAxMDAgMTAwJyUzRSUzQ3JlY3Qgd2lkdGg9JzEwMCcgaGVpZ2h0PScxMDAnIGZpbGw9JyUyMzAwMCcvJTNFJTNDcGF0aCBkPSdNNTAgMjBMNzAgNTBINTVWODBINDVWNTBIMzBaJyBmaWxsPSclMjNmZmYnLyUzRSUzQy9zdmclM0UiLCJzaXplcyI6IjE5MngxOTIiLCJ0eXBlIjoiaW1hZ2Uvc3ZnK3htbCJ9XX0=">
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-            -webkit-tap-highlight-color: transparent;
-        }
+  <meta charset="UTF-8">
+  <meta name="viewport"
+    content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#000000">
+  <meta name="format-detection" content="telephone=no">
+  <title>Head-Up Navigator</title>
+  <link rel="manifest"
+    href="data:application/json;base64,eyJuYW1lIjoiSGVhZC1VcCBOYXZpZ2F0b3IiLCJzaG9ydF9uYW1lIjoiSFVEIE5hdiIsInN0YXJ0X3VybCI6Ii8iLCJkaXNwbGF5IjoiZnVsbHNjcmVlbiIsImJhY2tncm91bmRfY29sb3IiOiIjMDAwMDAwIiwidGhlbWVfY29sb3IiOiIjMDAwMDAwIiwib3JpZW50YXRpb24iOiJsYW5kc2NhcGUiLCJpY29ucyI6W3sic3JjIjoiZGF0YTppbWFnZS9zdmcreG1sLCUzQ3N2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHZpZXdCb3g9JzAgMCAxMDAgMTAwJyUzRSUzQ3JlY3Qgd2lkdGg9JzEwMCcgaGVpZ2h0PScxMDAnIGZpbGw9JyUyMzAwMCcvJTNFJTNDcGF0aCBkPSdNNTAgMjBMNzAgNTBINTVWODBINDVWNTBIMzBaJyBmaWxsPSclMjNmZmYnLyUzRSUzQy9zdmclM0UiLCJzaXplcyI6IjE5MngxOTIiLCJ0eXBlIjoiaW1hZ2Uvc3ZnK3htbCJ9XX0=">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
 
-        html,
-        body {
-            width: 100%;
-            height: 100%;
-            overflow: hidden;
-            background: #000;
-            color: #fff;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            touch-action: none;
-            user-select: none;
-            -webkit-user-select: none;
-            position: fixed;
-            overscroll-behavior: none;
-        }
+    html,
+    body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #000;
+      color: #fff;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      touch-action: none;
+      user-select: none;
+      -webkit-user-select: none;
+      position: fixed;
+      overscroll-behavior: none;
+    }
 
-        #app {
-            width: 100%;
-            height: 100%;
-            display: flex;
-            flex-direction: column;
-            transition: transform 0.3s ease;
-        }
+    #app {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      transition: transform 0.3s ease;
+    }
 
-        #app.mirrored {
-            transform: scaleX(-1);
-        }
+    #app.mirrored {
+      transform: scaleX(-1);
+    }
 
-        #app.mirrored #maneuverIcon,
-        #app.mirrored #speedDisplay,
-        #app.mirrored #etaDisplay,
-        #app.mirrored #streetName {
-            transform: scaleX(-1);
-        }
+    #app.mirrored #maneuverIcon,
+    #app.mirrored #speedDisplay,
+    #app.mirrored #etaDisplay,
+    #app.mirrored #streetName {
+      transform: scaleX(-1);
+    }
 
-        /* Setup Screen */
-        #setup {
-            width: 100%;
-            height: 100%;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            padding: 2rem;
-            gap: 2rem;
-        }
+    /* Setup Screen */
+    #setup {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem;
+      gap: 2rem;
+    }
 
-        #setup h1 {
-            font-size: 2rem;
-            font-weight: 300;
-            letter-spacing: 0.1em;
-        }
+    #setup h1 {
+      font-size: 2rem;
+      font-weight: 300;
+      letter-spacing: 0.1em;
+    }
 
-        #destinationInput {
-            width: 100%;
-            max-width: 500px;
-            padding: 1rem 1.5rem;
-            font-size: 1.2rem;
-            background: #1a1a1a;
-            border: 1px solid #333;
-            color: #fff;
-            border-radius: 8px;
-            outline: none;
-        }
+    #destinationInput {
+      width: 100%;
+      max-width: 500px;
+      padding: 1rem 1.5rem;
+      font-size: 1.2rem;
+      background: #1a1a1a;
+      border: 1px solid #333;
+      color: #fff;
+      border-radius: 8px;
+      outline: none;
+    }
 
-        #startBtn,
-        #voiceBtn {
-            padding: 1rem 3rem;
-            font-size: 1.2rem;
-            background: #fff;
-            color: #000;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-            font-weight: 500;
-            transition: opacity 0.2s;
-        }
+    #startBtn,
+    #voiceBtn {
+      padding: 1rem 3rem;
+      font-size: 1.2rem;
+      background: #fff;
+      color: #000;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 500;
+      transition: opacity 0.2s;
+    }
 
-        #startBtn:active,
-        #voiceBtn:active {
-            opacity: 0.7;
-        }
+    #startBtn:active,
+    #voiceBtn:active {
+      opacity: 0.7;
+    }
 
-        #voiceBtn {
-            background: #333;
-            color: #fff;
-        }
+    #voiceBtn {
+      background: #333;
+      color: #fff;
+    }
 
-        /* HUD Screen - Always horizontal layout */
-        #hud {
-            display: none;
-            width: 100%;
-            height: 100%;
-            flex-direction: row;
-        }
+    /* HUD Screen - default horizontal layout */
+    #hud {
+      display: none;
+      width: 100%;
+      height: 100%;
+      flex-direction: row;
+    }
 
-        #hud.active {
-            display: flex;
-        }
+    #hud.active {
+      display: flex;
+    }
 
-        /* Fullscreen button */
-        #fullscreenBtn {
-            position: fixed;
-            top: 1rem;
-            right: 1rem;
-            padding: 0.75rem 1.5rem;
-            background: rgba(255, 255, 255, 0.1);
-            color: #fff;
-            border: 1px solid rgba(255, 255, 255, 0.3);
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 0.9rem;
-            z-index: 1000;
-            backdrop-filter: blur(10px);
-            transition: all 0.2s;
-        }
+    /* Fullscreen button */
+    #fullscreenBtn {
+      position: fixed;
+      top: 1rem;
+      right: 1rem;
+      padding: 0.75rem 1.5rem;
+      background: rgba(255, 255, 255, 0.1);
+      color: #fff;
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 0.9rem;
+      z-index: 1000;
+      backdrop-filter: blur(10px);
+      transition: all 0.2s;
+    }
 
-        #fullscreenBtn:hover {
-            background: rgba(255, 255, 255, 0.2);
-            border-color: rgba(255, 255, 255, 0.5);
-        }
+    #fullscreenBtn:hover {
+      background: rgba(255, 255, 255, 0.2);
+      border-color: rgba(255, 255, 255, 0.5);
+    }
 
-        #fullscreenBtn.hidden {
-            display: none;
-        }
+    #fullscreenBtn.hidden {
+      display: none;
+    }
 
-        /* Left Panel - Navigation Info */
-        #navPanel {
-            flex: 1;
-            background: #000;
-            display: flex;
-            flex-direction: column;
-            justify-content: space-between;
-            padding: 2rem;
-            position: relative;
-        }
+    /* Ensure flex children can shrink on small screens (important!) */
+    #navPanel,
+    #mapPanel {
+      min-width: 0;
+    }
 
-        #maneuverSection {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            gap: 1.5rem;
-        }
+    /* Left Panel - Navigation Info */
+    #navPanel {
+      flex: 1;
+      background: #000;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 2rem;
+      position: relative;
+    }
 
-        #maneuverIcon {
-            width: 180px;
-            height: 180px;
-            fill: #fff;
-        }
+    #maneuverSection {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 1.5rem;
+    }
 
-        #distance {
-            font-size: 4rem;
-            font-weight: 300;
-            letter-spacing: 0.05em;
-        }
+    #maneuverIcon {
+      width: 180px;
+      height: 180px;
+      fill: #fff;
+    }
 
-        #streetName {
-            font-size: 1.5rem;
-            color: #999;
-            text-align: center;
-            max-width: 90%;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-        }
+    #distance {
+      font-size: 4rem;
+      font-weight: 300;
+      letter-spacing: 0.05em;
+    }
 
-        #statusSection {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-end;
-            padding-top: 1rem;
-            border-top: 1px solid #222;
-        }
+    #streetName {
+      font-size: 1.5rem;
+      color: #999;
+      text-align: center;
+      max-width: 90%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
 
-        #speedDisplay {
-            font-size: 3rem;
-            font-weight: 300;
-        }
+    #statusSection {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      padding-top: 1rem;
+      border-top: 1px solid #222;
+    }
 
-        #speedUnit {
-            font-size: 1.5rem;
-            color: #666;
-            margin-left: 0.5rem;
-        }
+    #speedDisplay {
+      font-size: 3rem;
+      font-weight: 300;
+    }
 
-        #etaDisplay {
-            text-align: right;
-        }
+    #speedUnit {
+      font-size: 1.5rem;
+      color: #666;
+      margin-left: 0.5rem;
+    }
 
-        #eta {
-            font-size: 1.8rem;
-            color: #999;
-        }
+    #etaDisplay {
+      text-align: right;
+    }
 
-        #remaining {
-            font-size: 1.2rem;
-            color: #666;
-            margin-top: 0.3rem;
-        }
+    #eta {
+      font-size: 1.8rem;
+      color: #999;
+    }
 
-        /* Right Panel - Map */
-        #mapPanel {
-            flex: 1;
-            position: relative;
-            background: #000;
-        }
+    #remaining {
+      font-size: 1.2rem;
+      color: #666;
+      margin-top: 0.3rem;
+    }
 
-        #map {
-            width: 100%;
-            height: 100%;
-            filter: grayscale(80%) contrast(1.3) brightness(0.7);
-        }
+    /* Right Panel - Map */
+    #mapPanel {
+      flex: 1;
+      position: relative;
+      background: #000;
+    }
 
-        .leaflet-container {
-            background: #000;
-        }
+    #map {
+      width: 100%;
+      height: 100%;
+      filter: grayscale(80%) contrast(1.3) brightness(0.7);
+    }
 
-        .leaflet-control-container {
-            display: none;
-        }
+    .leaflet-container {
+      background: #000;
+    }
 
-        /* Roundabout Icon */
-        .roundabout-circle {
-            stroke: #fff;
-            stroke-width: 3;
-            fill: none;
-        }
+    .leaflet-control-container {
+      display: none;
+    }
 
-        .roundabout-exit {
-            stroke: #fff;
-            stroke-width: 4;
-            fill: none;
-        }
+    /* Roundabout Icon */
+    .roundabout-circle {
+      stroke: #fff;
+      stroke-width: 3;
+      fill: none;
+    }
 
-        .roundabout-number {
-            fill: #fff;
-            font-size: 24px;
-            font-weight: bold;
-            text-anchor: middle;
-        }
-    </style>
+    .roundabout-exit {
+      stroke: #fff;
+      stroke-width: 4;
+      fill: none;
+    }
+
+    .roundabout-number {
+      fill: #fff;
+      font-size: 24px;
+      font-weight: bold;
+      text-anchor: middle;
+    }
+
+    /* ========= Responsive fixes ========= */
+
+    /* 1) Portrait: stack nav over map */
+    @media (orientation: portrait) {
+      #hud {
+        flex-direction: column;
+      }
+
+      #navPanel {
+        flex: 0 0 auto;
+        padding: 1rem;
+      }
+
+      #mapPanel {
+        flex: 1 1 auto;
+      }
+
+      #maneuverIcon {
+        width: 120px;
+        height: 120px;
+      }
+
+      #distance {
+        font-size: 2.6rem;
+      }
+
+      #streetName {
+        font-size: 1.1rem;
+      }
+
+      #speedDisplay {
+        font-size: 2.2rem;
+      }
+
+      #speedUnit {
+        font-size: 1.2rem;
+      }
+
+      #eta {
+        font-size: 1.5rem;
+      }
+
+      #remaining {
+        font-size: 1rem;
+      }
+    }
+
+    /* 2) Small screens (both orientations): reduce bulk */
+    @media (max-width: 900px) {
+      #navPanel {
+        padding: 1.25rem;
+      }
+
+      #maneuverIcon {
+        width: 140px;
+        height: 140px;
+      }
+
+      #distance {
+        font-size: 3rem;
+      }
+
+      #streetName {
+        font-size: 1.2rem;
+      }
+
+      #speedDisplay {
+        font-size: 2.4rem;
+      }
+    }
+  </style>
 </head>
 
 <body>
-    <div id="app">
-        <!-- Setup Screen -->
-        <div id="setup">
-            <h1>HEAD-UP NAVIGATOR</h1>
-            <input type="text" id="destinationInput" placeholder="Voer bestemming in...">
-            <button id="voiceBtn">🎤 Spreek bestemming in</button>
-            <button id="startBtn">Start navigatie</button>
-        </div>
-
-        <!-- HUD Screen -->
-        <div id="hud">
-            <button id="fullscreenBtn">⛶ Volledig scherm</button>
-            <div id="navPanel">
-                <div id="maneuverSection">
-                    <svg id="maneuverIcon" viewBox="0 0 100 100"></svg>
-                    <div id="distance">--</div>
-                    <div id="streetName">--</div>
-                </div>
-                <div id="statusSection">
-                    <div id="speedDisplay">
-                        <span id="speed">0</span><span id="speedUnit">km/h</span>
-                    </div>
-                    <div id="etaDisplay">
-                        <div id="eta">--:--</div>
-                        <div id="remaining">-- km</div>
-                    </div>
-                </div>
-            </div>
-            <div id="mapPanel">
-                <div id="map"></div>
-            </div>
-        </div>
+  <div id="app">
+    <!-- Setup Screen -->
+    <div id="setup">
+      <h1>HEAD-UP NAVIGATOR</h1>
+      <input type="text" id="destinationInput" placeholder="Voer bestemming in...">
+      <button id="voiceBtn">🎤 Spreek bestemming in</button>
+      <button id="startBtn">Start navigatie</button>
     </div>
 
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <!-- HUD Screen -->
+    <div id="hud">
+      <button id="fullscreenBtn">⛶ Volledig scherm</button>
+      <div id="navPanel">
+        <div id="maneuverSection">
+          <svg id="maneuverIcon" viewBox="0 0 100 100"></svg>
+          <div id="distance">--</div>
+          <div id="streetName">--</div>
+        </div>
+        <div id="statusSection">
+          <div id="speedDisplay">
+            <span id="speed">0</span><span id="speedUnit">km/h</span>
+          </div>
+          <div id="etaDisplay">
+            <div id="eta">--:--</div>
+            <div id="remaining">-- km</div>
+          </div>
+        </div>
+      </div>
+      <div id="mapPanel">
+        <div id="map"></div>
+      </div>
+    </div>
+  </div>
 
-    <script>
-        'use strict';
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
-        // STATE MANAGEMENT
-        const State = {
-            route: null,
-            currentStepIndex: 0,
-            position: null,
-            heading: 0,
-            speed: 0,
-            destination: null,
-            mirrored: false,
+  <script>
+    'use strict';
 
-            save() {
-                localStorage.setItem('hudNav', JSON.stringify({
-                    route: this.route,
-                    currentStepIndex: this.currentStepIndex,
-                    destination: this.destination,
-                    heading: this.heading,
-                    mirrored: this.mirrored
-                }));
-            },
+    /** -----------------------------
+     *  UTILITIES (DRY)
+     *  ----------------------------- */
+    const Geo = {
+      toRad(deg) { return deg * Math.PI / 180; },
 
-            restore() {
-                const saved = localStorage.getItem('hudNav');
-                if (saved) {
-                    const data = JSON.parse(saved);
-                    this.route = data.route;
-                    this.currentStepIndex = data.currentStepIndex;
-                    this.destination = data.destination;
-                    this.heading = data.heading || 0;
-                    this.mirrored = data.mirrored || false;
-                    return true;
-                }
-                return false;
-            },
+      distanceMeters(p1, p2) {
+        const R = 6371e3;
+        const φ1 = Geo.toRad(p1.lat);
+        const φ2 = Geo.toRad(p2.lat);
+        const Δφ = Geo.toRad(p2.lat - p1.lat);
+        const Δλ = Geo.toRad(p2.lng - p1.lng);
 
-            clear() {
-                localStorage.removeItem('hudNav');
-                this.route = null;
-                this.currentStepIndex = 0;
-                this.destination = null;
-                this.mirrored = false;
-            }
+        const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+          Math.cos(φ1) * Math.cos(φ2) *
+          Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        return R * c;
+      },
+
+      bearingDegrees(p1, p2) {
+        const φ1 = Geo.toRad(p1.lat);
+        const φ2 = Geo.toRad(p2.lat);
+        const Δλ = Geo.toRad(p2.lng - p1.lng);
+
+        const y = Math.sin(Δλ) * Math.cos(φ2);
+        const x = Math.cos(φ1) * Math.sin(φ2) -
+          Math.sin(φ1) * Math.cos(φ2) * Math.cos(Δλ);
+        const θ = Math.atan2(y, x);
+        return (θ * 180 / Math.PI + 360) % 360;
+      },
+
+      averageAngleDeg(anglesDeg) {
+        let x = 0, y = 0;
+        anglesDeg.forEach(a => {
+          x += Math.cos(Geo.toRad(a));
+          y += Math.sin(Geo.toRad(a));
+        });
+        return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+      }
+    };
+
+    const Dom = {
+      app: () => document.getElementById('app'),
+      setup: () => document.getElementById('setup'),
+      hud: () => document.getElementById('hud'),
+      fullscreenBtn: () => document.getElementById('fullscreenBtn'),
+      destinationInput: () => document.getElementById('destinationInput'),
+      startBtn: () => document.getElementById('startBtn'),
+      voiceBtn: () => document.getElementById('voiceBtn'),
+    };
+
+    /** -----------------------------
+     *  STATE (throttled + minimal persistence)
+     *  ----------------------------- */
+    const State = {
+      route: null,
+      currentStepIndex: 0,
+      position: null,
+      heading: 0,
+      speed: 0,
+      mirrored: false,
+
+      destination: null,         // {lat,lng}
+      destinationQuery: null,    // string
+
+      _dirty: false,
+      _lastSaveAt: 0,
+      _saveMinIntervalMs: 2500,
+
+      markDirty() { this._dirty = true; },
+
+      _snapshot() {
+        return {
+          destination: this.destination,
+          destinationQuery: this.destinationQuery,
+          currentStepIndex: this.currentStepIndex,
+          mirrored: this.mirrored
         };
+      },
 
-        // GPS & HEADING
-        class LocationTracker {
-            constructor() {
-                this.watchId = null;
-                this.lastPosition = null;
-                this.speedBuffer = [];
-                this.headingBuffer = [];
-                this.compassHeading = 0;
-                this.minSpeedForGPSHeading = 2;
-            }
-
-            start(callback) {
-                if ('geolocation' in navigator) {
-                    this.watchId = navigator.geolocation.watchPosition(
-                        (pos) => this.handlePosition(pos, callback),
-                        (err) => console.error('GPS error:', err),
-                        {
-                            enableHighAccuracy: true,
-                            maximumAge: 1000,
-                            timeout: 5000
-                        }
-                    );
-                }
-
-                if (window.DeviceOrientationEvent) {
-                    window.addEventListener('deviceorientationabsolute', (e) => {
-                        if (e.absolute && e.alpha !== null) {
-                            this.compassHeading = e.alpha;
-                        }
-                    });
-
-                    window.addEventListener('deviceorientation', (e) => {
-                        if (e.alpha !== null && this.compassHeading === 0) {
-                            this.compassHeading = e.alpha;
-                        }
-                    });
-                }
-            }
-
-            handlePosition(pos, callback) {
-                const current = {
-                    lat: pos.coords.latitude,
-                    lng: pos.coords.longitude,
-                    accuracy: pos.coords.accuracy,
-                    speed: pos.coords.speed || 0
-                };
-
-                let speed = current.speed;
-                if (this.lastPosition && !speed) {
-                    const dist = this.distance(this.lastPosition, current);
-                    const time = (pos.timestamp - this.lastPosition.timestamp) / 1000;
-                    speed = time > 0 ? dist / time : 0;
-                }
-
-                this.speedBuffer.push(speed);
-                if (this.speedBuffer.length > 5) this.speedBuffer.shift();
-                const avgSpeed = this.speedBuffer.reduce((a, b) => a + b, 0) / this.speedBuffer.length;
-
-                let heading = this.compassHeading;
-                if (this.lastPosition && avgSpeed > this.minSpeedForGPSHeading) {
-                    heading = this.bearing(this.lastPosition, current);
-                }
-
-                this.headingBuffer.push(heading);
-                if (this.headingBuffer.length > 3) this.headingBuffer.shift();
-                const avgHeading = this.averageAngle(this.headingBuffer);
-
-                this.lastPosition = { ...current, timestamp: pos.timestamp };
-
-                callback({
-                    position: current,
-                    speed: avgSpeed,
-                    heading: avgHeading
-                });
-            }
-
-            distance(p1, p2) {
-                const R = 6371e3;
-                const φ1 = p1.lat * Math.PI / 180;
-                const φ2 = p2.lat * Math.PI / 180;
-                const Δφ = (p2.lat - p1.lat) * Math.PI / 180;
-                const Δλ = (p2.lng - p1.lng) * Math.PI / 180;
-
-                const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
-                    Math.cos(φ1) * Math.cos(φ2) *
-                    Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
-                const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-
-                return R * c;
-            }
-
-            bearing(p1, p2) {
-                const φ1 = p1.lat * Math.PI / 180;
-                const φ2 = p2.lat * Math.PI / 180;
-                const Δλ = (p2.lng - p1.lng) * Math.PI / 180;
-
-                const y = Math.sin(Δλ) * Math.cos(φ2);
-                const x = Math.cos(φ1) * Math.sin(φ2) -
-                    Math.sin(φ1) * Math.cos(φ2) * Math.cos(Δλ);
-                const θ = Math.atan2(y, x);
-
-                return (θ * 180 / Math.PI + 360) % 360;
-            }
-
-            averageAngle(angles) {
-                let x = 0, y = 0;
-                angles.forEach(a => {
-                    x += Math.cos(a * Math.PI / 180);
-                    y += Math.sin(a * Math.PI / 180);
-                });
-                return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
-            }
-
-            stop() {
-                if (this.watchId) {
-                    navigator.geolocation.clearWatch(this.watchId);
-                }
-            }
+      save(force = false) {
+        const now = Date.now();
+        if (!force) {
+          if (!this._dirty) return;
+          if (now - this._lastSaveAt < this._saveMinIntervalMs) return;
         }
-
-        // ROUTING
-        class Router {
-            async geocode(query) {
-                const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&countrycodes=nl&limit=1`;
-                const res = await fetch(url);
-                const data = await res.json();
-                if (data.length === 0) throw new Error('Bestemming niet gevonden');
-                return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
-            }
-
-            async getRoute(from, to) {
-                const url = `https://router.project-osrm.org/route/v1/driving/${from.lng},${from.lat};${to.lng},${to.lat}?overview=full&geometries=geojson&steps=true`;
-                const res = await fetch(url);
-                const data = await res.json();
-                if (data.code !== 'Ok') throw new Error('Route niet gevonden');
-                return data.routes[0];
-            }
+        try {
+          localStorage.setItem('hudNav', JSON.stringify(this._snapshot()));
+          this._lastSaveAt = now;
+          this._dirty = false;
+        } catch (e) {
+          console.warn('State save failed:', e);
         }
+      },
 
-        // UI RENDERING
-        class HUD {
-            constructor() {
-                this.maneuverIcon = document.getElementById('maneuverIcon');
-                this.distance = document.getElementById('distance');
-                this.streetName = document.getElementById('streetName');
-                this.speed = document.getElementById('speed');
-                this.eta = document.getElementById('eta');
-                this.remaining = document.getElementById('remaining');
-                this.lastUpdate = 0;
-                this.updateThrottle = 500;
-            }
+      restore() {
+        try {
+          const saved = localStorage.getItem('hudNav');
+          if (!saved) return false;
+          const data = JSON.parse(saved);
 
-            update(data) {
-                const now = Date.now();
-                if (now - this.lastUpdate < this.updateThrottle) return;
-                this.lastUpdate = now;
+          this.destination = data.destination || null;
+          this.destinationQuery = data.destinationQuery || null;
+          this.currentStepIndex = Number.isFinite(data.currentStepIndex) ? data.currentStepIndex : 0;
+          this.mirrored = !!data.mirrored;
 
-                if (data.maneuver) {
-                    this.renderManeuver(data.maneuver);
-                }
-
-                if (data.distance !== undefined) {
-                    this.distance.textContent = data.distance < 1000
-                        ? `${Math.round(data.distance)} m`
-                        : `${(data.distance / 1000).toFixed(1)} km`;
-                }
-
-                if (data.street) {
-                    this.streetName.textContent = data.street;
-                }
-
-                if (data.speed !== undefined && data.speed > 1) {
-                    this.speed.textContent = Math.round(data.speed * 3.6);
-                } else {
-                    this.speed.textContent = '0';
-                }
-
-                if (data.eta) {
-                    const etaDate = new Date(Date.now() + data.eta * 1000);
-                    this.eta.textContent = `${String(etaDate.getHours()).padStart(2, '0')}:${String(etaDate.getMinutes()).padStart(2, '0')}`;
-                }
-
-                if (data.remaining !== undefined) {
-                    this.remaining.textContent = `${(data.remaining / 1000).toFixed(1)} km`;
-                }
-            }
-
-            renderManeuver(maneuver) {
-                const type = maneuver.type;
-                const modifier = maneuver.modifier || '';
-
-                if (type === 'roundabout' || type === 'rotary') {
-                    this.renderRoundabout(maneuver);
-                } else {
-                    this.renderArrow(type, modifier);
-                }
-            }
-
-            renderArrow(type, modifier) {
-                let path = '';
-
-                if (type === 'arrive') {
-                    path = '<circle cx="50" cy="50" r="20" fill="none" stroke="#fff" stroke-width="3"/><circle cx="50" cy="50" r="10" fill="#fff"/>';
-                } else if (modifier.includes('straight')) {
-                    path = '<path d="M50 20 L50 80 M35 30 L50 20 L65 30" stroke="#fff" stroke-width="3" fill="none"/>';
-                } else if (modifier.includes('right')) {
-                    const sharp = modifier.includes('sharp');
-                    path = sharp
-                        ? '<path d="M30 70 L30 40 Q30 30 40 30 L70 30 M60 20 L70 30 L60 40" stroke="#fff" stroke-width="3" fill="none"/>'
-                        : '<path d="M30 70 L30 45 Q30 30 45 30 L70 30 M60 25 L70 30 L60 35" stroke="#fff" stroke-width="3" fill="none"/>';
-                } else if (modifier.includes('left')) {
-                    const sharp = modifier.includes('sharp');
-                    path = sharp
-                        ? '<path d="M70 70 L70 40 Q70 30 60 30 L30 30 M40 20 L30 30 L40 40" stroke="#fff" stroke-width="3" fill="none"/>'
-                        : '<path d="M70 70 L70 45 Q70 30 55 30 L30 30 M40 25 L30 30 L40 35" stroke="#fff" stroke-width="3" fill="none"/>';
-                } else {
-                    path = '<path d="M50 20 L50 80 M35 30 L50 20 L65 30" stroke="#fff" stroke-width="3" fill="none"/>';
-                }
-
-                this.maneuverIcon.innerHTML = path;
-            }
-
-            renderRoundabout(maneuver) {
-                const exit = maneuver.exit || 1;
-                const totalExits = Math.max(exit + 2, 4);
-
-                let svg = '<circle cx="50" cy="50" r="25" class="roundabout-circle"/>';
-
-                for (let i = 1; i <= totalExits; i++) {
-                    const angle = (i / totalExits) * 360 - 90;
-                    const rad = angle * Math.PI / 180;
-                    const x1 = 50 + Math.cos(rad) * 25;
-                    const y1 = 50 + Math.sin(rad) * 25;
-                    const x2 = 50 + Math.cos(rad) * 40;
-                    const y2 = 50 + Math.sin(rad) * 40;
-
-                    const strokeWidth = i === exit ? 6 : 3;
-                    const opacity = i === exit ? 1 : 0.5;
-
-                    svg += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" class="roundabout-exit" stroke-width="${strokeWidth}" opacity="${opacity}"/>`;
-                }
-
-                svg += `<text x="50" y="58" class="roundabout-number">${exit}</text>`;
-
-                this.maneuverIcon.innerHTML = svg;
-            }
+          return !!this.destination;
+        } catch (e) {
+          console.warn('State restore failed:', e);
+          return false;
         }
+      },
+
+      clear() {
+        try { localStorage.removeItem('hudNav'); } catch { }
+        this.route = null;
+        this.currentStepIndex = 0;
+        this.destination = null;
+        this.destinationQuery = null;
+        this.mirrored = false;
+        this._dirty = false;
+        this._lastSaveAt = 0;
+      }
+    };
+
+    /** -----------------------------
+     *  DEVICE UX SERVICE
+     *  ----------------------------- */
+    class DeviceUXService {
+      constructor({ onBecameVisible } = {}) {
+        this.wakeLock = null;
+        this._listenersBound = false;
+        this.onBecameVisible = onBecameVisible || (() => { });
+      }
+
+      bindOnce() {
+        if (this._listenersBound) return;
+        this._listenersBound = true;
+
+        document.addEventListener('fullscreenchange', () => this.lockLandscape());
+        document.addEventListener('webkitfullscreenchange', () => this.lockLandscape());
 
-        // MAP
-        class MapView {
-            constructor() {
-                this.map = null;
-                this.routeLayer = null;
-                this.positionMarker = null;
-            }
-
-            init() {
-                this.map = L.map('map', {
-                    zoomControl: false,
-                    attributionControl: false,
-                    dragging: false,
-                    touchZoom: false,
-                    scrollWheelZoom: false,
-                    doubleClickZoom: false,
-                    boxZoom: false,
-                    keyboard: false
-                }).setView([52.0907, 5.1214], 13);
-
-                L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png', {
-                    maxZoom: 19
-                }).addTo(this.map);
-            }
-
-            setRoute(route) {
-                if (this.routeLayer) {
-                    this.map.removeLayer(this.routeLayer);
-                }
-
-                const coords = route.geometry.coordinates.map(c => [c[1], c[0]]);
-                this.routeLayer = L.polyline(coords, {
-                    color: '#fff',
-                    weight: 3,
-                    opacity: 0.6
-                }).addTo(this.map);
-
-                this.map.fitBounds(this.routeLayer.getBounds());
-            }
-
-            updatePosition(lat, lng, heading) {
-                if (!this.positionMarker) {
-                    this.positionMarker = L.circleMarker([lat, lng], {
-                        radius: 8,
-                        color: '#fff',
-                        fillColor: '#fff',
-                        fillOpacity: 1,
-                        weight: 2
-                    }).addTo(this.map);
-                } else {
-                    this.positionMarker.setLatLng([lat, lng]);
-                }
-
-                this.map.setView([lat, lng], 16, { animate: false });
-
-                const mapContainer = this.map.getContainer();
-                mapContainer.style.transform = `rotate(${-heading}deg)`;
-            }
-        }
-
-        // NAVIGATION ENGINE
-        class NavigationEngine {
-            constructor() {
-                this.tracker = new LocationTracker();
-                this.router = new Router();
-                this.hud = new HUD();
-                this.mapView = new MapView();
-                this.longPressTimer = null;
-            }
-
-            async start(destination) {
-                try {
-                    const pos = await this.getCurrentPosition();
-                    State.position = pos;
-
-                    const dest = await this.router.geocode(destination);
-                    State.destination = dest;
-
-                    const route = await this.router.getRoute(pos, dest);
-                    State.route = route;
-                    State.currentStepIndex = 0;
-                    State.save();
-
-                    this.mapView.init();
-                    this.mapView.setRoute(route);
-
-                    this.tracker.start((data) => this.handleLocationUpdate(data));
-
-                    this.requestWakeLock();
-                    this.setupTouchHandling();
-                    this.setupFullscreenButton();
-
-                    document.getElementById('setup').style.display = 'none';
-                    document.getElementById('hud').classList.add('active');
-
-                    // Request fullscreen immediately
-                    setTimeout(() => this.requestFullscreen(), 500);
-
-                } catch (err) {
-                    alert('Fout bij starten navigatie: ' + err.message);
-                }
-            }
-
-            getCurrentPosition() {
-                return new Promise((resolve, reject) => {
-                    navigator.geolocation.getCurrentPosition(
-                        (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-                        (err) => reject(err),
-                        { enableHighAccuracy: true, timeout: 10000 }
-                    );
-                });
-            }
-
-            handleLocationUpdate(data) {
-                State.position = data.position;
-                State.speed = data.speed;
-                State.heading = data.heading;
-                State.save();
-
-                if (!State.route) return;
-
-                const step = this.findCurrentStep(data.position);
-                if (step) {
-                    const distToManeuver = this.distanceToPoint(data.position, step.maneuver.location);
-                    const totalRemaining = this.calculateRemainingDistance(data.position);
-                    const eta = data.speed > 0 ? totalRemaining / data.speed : null;
-
-                    this.hud.update({
-                        maneuver: step.maneuver,
-                        distance: distToManeuver,
-                        street: step.name || 'Naamloze weg',
-                        speed: data.speed,
-                        eta: eta,
-                        remaining: totalRemaining
-                    });
-                }
-
-                this.mapView.updatePosition(data.position.lat, data.position.lng, data.heading);
-            }
-
-            findCurrentStep(position) {
-                if (!State.route || !State.route.legs) return null;
-
-                const steps = State.route.legs[0].steps;
-                let minDist = Infinity;
-                let currentStep = null;
-                let currentIndex = State.currentStepIndex;
-
-                for (let i = currentIndex; i < steps.length; i++) {
-                    const step = steps[i];
-                    const dist = this.distanceToPoint(position, step.maneuver.location);
-
-                    if (dist < minDist) {
-                        minDist = dist;
-                        currentStep = step;
-                        currentIndex = i;
-                    }
-
-                    if (dist < 20) {
-                        State.currentStepIndex = Math.min(i + 1, steps.length - 1);
-                        State.save();
-                        break;
-                    }
-                }
-
-                return currentStep || steps[currentIndex];
-            }
-
-            distanceToPoint(pos, point) {
-                const R = 6371e3;
-                const φ1 = pos.lat * Math.PI / 180;
-                const φ2 = point[1] * Math.PI / 180;
-                const Δφ = (point[1] - pos.lat) * Math.PI / 180;
-                const Δλ = (point[0] - pos.lng) * Math.PI / 180;
-
-                const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
-                    Math.cos(φ1) * Math.cos(φ2) *
-                    Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
-                const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-
-                return R * c;
-            }
-
-            calculateRemainingDistance(position) {
-                if (!State.route || !State.route.legs) return 0;
-
-                const steps = State.route.legs[0].steps;
-                let total = 0;
-
-                for (let i = State.currentStepIndex; i < steps.length; i++) {
-                    total += steps[i].distance;
-                }
-
-                return total;
-            }
-
-            setupTouchHandling() {
-                const hud = document.getElementById('hud');
-                const app = document.getElementById('app');
-                let touchStartTime = 0;
-                let touchMoved = false;
-
-                hud.addEventListener('touchstart', (e) => {
-                    touchStartTime = Date.now();
-                    touchMoved = false;
-
-                    this.longPressTimer = setTimeout(() => {
-                        if (confirm('Navigatie stoppen?')) {
-                            this.stop();
-                        }
-                    }, 2000);
-                });
-
-                hud.addEventListener('touchmove', () => {
-                    touchMoved = true;
-                    clearTimeout(this.longPressTimer);
-                });
-
-                hud.addEventListener('touchend', (e) => {
-                    clearTimeout(this.longPressTimer);
-
-                    const touchDuration = Date.now() - touchStartTime;
-
-                    if (touchDuration < 300 && !touchMoved) {
-                        State.mirrored = !State.mirrored;
-                        State.save();
-
-                        if (State.mirrored) {
-                            app.classList.add('mirrored');
-                        } else {
-                            app.classList.remove('mirrored');
-                        }
-                    }
-                });
-            }
-
-            setupFullscreenButton() {
-                const btn = document.getElementById('fullscreenBtn');
-
-                // Hide button when in fullscreen
-                const updateButtonVisibility = () => {
-                    if (document.fullscreenElement || document.webkitFullscreenElement) {
-                        btn.classList.add('hidden');
-                    } else {
-                        btn.classList.remove('hidden');
-                    }
-                };
-
-                document.addEventListener('fullscreenchange', updateButtonVisibility);
-                document.addEventListener('webkitfullscreenchange', updateButtonVisibility);
-
-                // Click handler
-                btn.addEventListener('click', () => {
-                    this.requestFullscreen();
-                });
-
-                // F11 key support
-                document.addEventListener('keydown', (e) => {
-                    if (e.key === 'F11') {
-                        e.preventDefault();
-                        this.requestFullscreen();
-                    }
-                });
-            }
-
-            requestFullscreen() {
-                const elem = document.documentElement;
-                if (elem.requestFullscreen) {
-                    elem.requestFullscreen().catch(() => { });
-                } else if (elem.webkitRequestFullscreen) {
-                    elem.webkitRequestFullscreen();
-                } else if (elem.mozRequestFullScreen) {
-                    elem.mozRequestFullScreen();
-                } else if (elem.msRequestFullscreen) {
-                    elem.msRequestFullscreen();
-                }
-            }
-
-            async requestWakeLock() {
-                try {
-                    if ('wakeLock' in navigator) {
-                        await navigator.wakeLock.request('screen');
-
-                        document.addEventListener('visibilitychange', async () => {
-                            if (document.visibilityState === 'visible') {
-                                await navigator.wakeLock.request('screen');
-                                this.requestFullscreen();
-                            }
-                        });
-                    }
-                } catch (err) {
-                    console.warn('Wake Lock not supported:', err);
-                }
-            }
-
-            stop() {
-                this.tracker.stop();
-                State.clear();
-                document.getElementById('hud').classList.remove('active');
-                document.getElementById('setup').style.display = 'flex';
-                location.reload();
-            }
-        }
-
-        // APP INITIALIZATION
-        const nav = new NavigationEngine();
-
-        // Voice input
-        document.getElementById('voiceBtn').addEventListener('click', () => {
-            if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
-                alert('Spraakherkenning niet ondersteund');
-                return;
-            }
-
-            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-            const recognition = new SpeechRecognition();
-            recognition.lang = 'nl-NL';
-            recognition.continuous = false;
-
-            recognition.onresult = (event) => {
-                const transcript = event.results[0][0].transcript;
-                document.getElementById('destinationInput').value = transcript;
-            };
-
-            recognition.onerror = (event) => {
-                alert('Spraakherkenning fout: ' + event.error);
-            };
-
-            recognition.start();
-        });
-
-        // Start navigation
-        document.getElementById('startBtn').addEventListener('click', () => {
-            const dest = document.getElementById('destinationInput').value.trim();
-            if (!dest) {
-                alert('Voer een bestemming in');
-                return;
-            }
-            nav.start(dest);
-        });
-
-        // Enter key to start
-        document.getElementById('destinationInput').addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
-                document.getElementById('startBtn').click();
-            }
-        });
-
-        // Restore session
-        if (State.restore() && State.route) {
-            if (State.mirrored) {
-                document.getElementById('app').classList.add('mirrored');
-            }
-
-            if (confirm('Vorige navigatie hervatten?')) {
-                nav.start(State.destination.lat + ',' + State.destination.lng);
-            } else {
-                State.clear();
-            }
-        }
-
-        // Force landscape orientation
-        const lockOrientation = () => {
-            if (screen.orientation && screen.orientation.lock) {
-                screen.orientation.lock('landscape').catch(() => { });
-            } else if (screen.lockOrientation) {
-                screen.lockOrientation('landscape');
-            } else if (screen.mozLockOrientation) {
-                screen.mozLockOrientation('landscape');
-            } else if (screen.msLockOrientation) {
-                screen.msLockOrientation('landscape');
-            }
-        };
-
-        lockOrientation();
-        document.addEventListener('fullscreenchange', lockOrientation);
-        document.addEventListener('webkitfullscreenchange', lockOrientation);
-
-        // Prevent sleep and maintain fullscreen
         document.addEventListener('visibilitychange', () => {
-            if (document.visibilityState === 'visible' && State.route) {
-                State.save();
-                lockOrientation();
-            }
+          if (document.visibilityState === 'visible') {
+            this.onBecameVisible();
+            this.requestWakeLock().catch(() => { });
+            this.lockLandscape();
+          }
         });
-    </script>
+      }
+
+      async requestWakeLock() {
+        try {
+          if (!('wakeLock' in navigator)) return;
+          if (this.wakeLock) return;
+          this.wakeLock = await navigator.wakeLock.request('screen');
+          this.wakeLock.addEventListener('release', () => {
+            this.wakeLock = null;
+          });
+        } catch { }
+      }
+
+      lockLandscape() {
+        try {
+          if (screen.orientation && screen.orientation.lock) {
+            screen.orientation.lock('landscape').catch(() => { });
+          } else if (screen.lockOrientation) {
+            screen.lockOrientation('landscape');
+          } else if (screen.mozLockOrientation) {
+            screen.mozLockOrientation('landscape');
+          } else if (screen.msLockOrientation) {
+            screen.msLockOrientation('landscape');
+          }
+        } catch { }
+      }
+
+      requestFullscreen() {
+        const elem = document.documentElement;
+        try {
+          if (elem.requestFullscreen) {
+            elem.requestFullscreen().catch(() => { });
+          } else if (elem.webkitRequestFullscreen) {
+            elem.webkitRequestFullscreen();
+          } else if (elem.mozRequestFullScreen) {
+            elem.mozRequestFullScreen();
+          } else if (elem.msRequestFullscreen) {
+            elem.msRequestFullscreen();
+          }
+        } catch { }
+      }
+
+      updateFullscreenButtonVisibility(btn) {
+        const inFs = !!(document.fullscreenElement || document.webkitFullscreenElement);
+        if (inFs) btn.classList.add('hidden');
+        else btn.classList.remove('hidden');
+      }
+    }
+
+    /** -----------------------------
+     *  LOCATION TRACKER
+     *  ----------------------------- */
+    class LocationTracker {
+      constructor() {
+        this.watchId = null;
+        this.lastPosition = null;
+        this.speedBuffer = [];
+        this.headingBuffer = [];
+        this.compassHeading = 0;
+        this.minSpeedForGPSHeading = 2; // m/s
+      }
+
+      start(callback) {
+        if ('geolocation' in navigator) {
+          this.watchId = navigator.geolocation.watchPosition(
+            (pos) => this.handlePosition(pos, callback),
+            (err) => console.error('GPS error:', err),
+            {
+              enableHighAccuracy: true,
+              maximumAge: 1000,
+              timeout: 5000
+            }
+          );
+        } else {
+          console.warn('Geolocation not supported');
+        }
+
+        if (window.DeviceOrientationEvent) {
+          window.addEventListener('deviceorientationabsolute', (e) => {
+            if (e.absolute && e.alpha !== null) this.compassHeading = e.alpha;
+          });
+
+          window.addEventListener('deviceorientation', (e) => {
+            if (e.alpha !== null && this.compassHeading === 0) this.compassHeading = e.alpha;
+          });
+        }
+      }
+
+      handlePosition(pos, callback) {
+        const current = {
+          lat: pos.coords.latitude,
+          lng: pos.coords.longitude,
+          accuracy: pos.coords.accuracy,
+          speed: pos.coords.speed || 0
+        };
+
+        let speed = current.speed;
+        if (this.lastPosition && (!Number.isFinite(speed) || speed === 0)) {
+          const dist = Geo.distanceMeters(this.lastPosition, current);
+          const time = (pos.timestamp - this.lastPosition.timestamp) / 1000;
+          speed = time > 0 ? dist / time : 0;
+        }
+
+        this.speedBuffer.push(speed);
+        if (this.speedBuffer.length > 5) this.speedBuffer.shift();
+        const avgSpeed = this.speedBuffer.reduce((a, b) => a + b, 0) / this.speedBuffer.length;
+
+        let heading = this.compassHeading;
+        if (this.lastPosition && avgSpeed > this.minSpeedForGPSHeading) {
+          heading = Geo.bearingDegrees(this.lastPosition, current);
+        }
+
+        this.headingBuffer.push(heading);
+        if (this.headingBuffer.length > 3) this.headingBuffer.shift();
+        const avgHeading = Geo.averageAngleDeg(this.headingBuffer);
+
+        this.lastPosition = { ...current, timestamp: pos.timestamp };
+
+        callback({
+          position: current,
+          speed: avgSpeed,
+          heading: avgHeading
+        });
+      }
+
+      stop() {
+        if (this.watchId) navigator.geolocation.clearWatch(this.watchId);
+        this.watchId = null;
+      }
+    }
+
+    /** -----------------------------
+     *  ROUTER
+     *  ----------------------------- */
+    class Router {
+      async geocode(query) {
+        const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&countrycodes=nl&limit=1`;
+        const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
+        const data = await res.json();
+        if (!data || data.length === 0) throw new Error('Bestemming niet gevonden');
+        return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
+      }
+
+      async getRoute(from, to) {
+        const url = `https://router.project-osrm.org/route/v1/driving/${from.lng},${from.lat};${to.lng},${to.lat}?overview=full&geometries=geojson&steps=true`;
+        const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
+        const data = await res.json();
+        if (!data || data.code !== 'Ok' || !data.routes || !data.routes[0]) throw new Error('Route niet gevonden');
+        return data.routes[0];
+      }
+    }
+
+    /** -----------------------------
+     *  HUD
+     *  ----------------------------- */
+    class HUD {
+      constructor() {
+        this.maneuverIcon = document.getElementById('maneuverIcon');
+        this.distance = document.getElementById('distance');
+        this.streetName = document.getElementById('streetName');
+        this.speed = document.getElementById('speed');
+        this.eta = document.getElementById('eta');
+        this.remaining = document.getElementById('remaining');
+        this.lastUpdate = 0;
+        this.updateThrottle = 500;
+
+        this.maneuverRenderers = {
+          roundabout: (m) => this.renderRoundabout(m),
+          rotary: (m) => this.renderRoundabout(m),
+          arrive: (m) => this.renderArrow('arrive', ''),
+        };
+      }
+
+      update(data) {
+        const now = Date.now();
+        if (now - this.lastUpdate < this.updateThrottle) return;
+        this.lastUpdate = now;
+
+        if (data.maneuver) this.renderManeuver(data.maneuver);
+
+        if (data.distance !== undefined) {
+          this.distance.textContent = data.distance < 1000
+            ? `${Math.round(data.distance)} m`
+            : `${(data.distance / 1000).toFixed(1)} km`;
+        }
+
+        if (data.street) this.streetName.textContent = data.street;
+
+        if (data.speed !== undefined && data.speed > 1) {
+          this.speed.textContent = Math.round(data.speed * 3.6);
+        } else {
+          this.speed.textContent = '0';
+        }
+
+        if (data.eta) {
+          const etaDate = new Date(Date.now() + data.eta * 1000);
+          this.eta.textContent =
+            `${String(etaDate.getHours()).padStart(2, '0')}:${String(etaDate.getMinutes()).padStart(2, '0')}`;
+        }
+
+        if (data.remaining !== undefined) {
+          this.remaining.textContent = `${(data.remaining / 1000).toFixed(1)} km`;
+        }
+      }
+
+      renderManeuver(maneuver) {
+        const type = maneuver.type;
+        const modifier = maneuver.modifier || '';
+
+        const renderer = this.maneuverRenderers[type];
+        if (renderer) return renderer(maneuver);
+
+        this.renderArrow(type, modifier);
+      }
+
+      renderArrow(type, modifier) {
+        let path = '';
+
+        if (type === 'arrive') {
+          path = '<circle cx="50" cy="50" r="20" fill="none" stroke="#fff" stroke-width="3"/><circle cx="50" cy="50" r="10" fill="#fff"/>';
+        } else if (modifier.includes('straight')) {
+          path = '<path d="M50 20 L50 80 M35 30 L50 20 L65 30" stroke="#fff" stroke-width="3" fill="none"/>';
+        } else if (modifier.includes('right')) {
+          const sharp = modifier.includes('sharp');
+          path = sharp
+            ? '<path d="M30 70 L30 40 Q30 30 40 30 L70 30 M60 20 L70 30 L60 40" stroke="#fff" stroke-width="3" fill="none"/>'
+            : '<path d="M30 70 L30 45 Q30 30 45 30 L70 30 M60 25 L70 30 L60 35" stroke="#fff" stroke-width="3" fill="none"/>';
+        } else if (modifier.includes('left')) {
+          const sharp = modifier.includes('sharp');
+          path = sharp
+            ? '<path d="M70 70 L70 40 Q70 30 60 30 L30 30 M40 20 L30 30 L40 40" stroke="#fff" stroke-width="3" fill="none"/>'
+            : '<path d="M70 70 L70 45 Q70 30 55 30 L30 30 M40 25 L30 30 L40 35" stroke="#fff" stroke-width="3" fill="none"/>';
+        } else {
+          path = '<path d="M50 20 L50 80 M35 30 L50 20 L65 30" stroke="#fff" stroke-width="3" fill="none"/>';
+        }
+
+        this.maneuverIcon.innerHTML = path;
+      }
+
+      renderRoundabout(maneuver) {
+        const exit = maneuver.exit || 1;
+        const totalExits = Math.max(exit + 2, 4);
+
+        let svg = '<circle cx="50" cy="50" r="25" class="roundabout-circle"/>';
+
+        for (let i = 1; i <= totalExits; i++) {
+          const angle = (i / totalExits) * 360 - 90;
+          const rad = angle * Math.PI / 180;
+          const x1 = 50 + Math.cos(rad) * 25;
+          const y1 = 50 + Math.sin(rad) * 25;
+          const x2 = 50 + Math.cos(rad) * 40;
+          const y2 = 50 + Math.sin(rad) * 40;
+
+          const strokeWidth = i === exit ? 6 : 3;
+          const opacity = i === exit ? 1 : 0.5;
+
+          svg += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" class="roundabout-exit" stroke-width="${strokeWidth}" opacity="${opacity}"/>`;
+        }
+
+        svg += `<text x="50" y="58" class="roundabout-number">${exit}</text>`;
+        this.maneuverIcon.innerHTML = svg;
+      }
+    }
+
+    /** -----------------------------
+     *  MAP VIEW
+     *  ----------------------------- */
+    class MapView {
+      constructor() {
+        this.map = null;
+        this.routeLayer = null;
+        this.positionMarker = null;
+        this._initialized = false;
+      }
+
+      init() {
+        if (this._initialized) return;
+        this._initialized = true;
+
+        this.map = L.map('map', {
+          zoomControl: false,
+          attributionControl: false,
+          dragging: false,
+          touchZoom: false,
+          scrollWheelZoom: false,
+          doubleClickZoom: false,
+          boxZoom: false,
+          keyboard: false
+        }).setView([52.0907, 5.1214], 13);
+
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png', {
+          maxZoom: 19
+        }).addTo(this.map);
+      }
+
+      setRoute(route) {
+        this.init();
+        if (this.routeLayer) this.map.removeLayer(this.routeLayer);
+
+        const coords = route.geometry.coordinates.map(c => [c[1], c[0]]);
+        this.routeLayer = L.polyline(coords, {
+          color: '#fff',
+          weight: 3,
+          opacity: 0.6
+        }).addTo(this.map);
+
+        this.map.fitBounds(this.routeLayer.getBounds());
+      }
+
+      updatePosition(lat, lng, heading) {
+        this.init();
+
+        if (!this.positionMarker) {
+          this.positionMarker = L.circleMarker([lat, lng], {
+            radius: 8,
+            color: '#fff',
+            fillColor: '#fff',
+            fillOpacity: 1,
+            weight: 2
+          }).addTo(this.map);
+        } else {
+          this.positionMarker.setLatLng([lat, lng]);
+        }
+
+        this.map.setView([lat, lng], 16, { animate: false });
+
+        const mapContainer = this.map.getContainer();
+        mapContainer.style.transform = `rotate(${-heading}deg)`;
+      }
+
+      invalidateSizeSoon() {
+        if (!this.map) return;
+        // Important for mobile when showing/resizing
+        setTimeout(() => {
+          try { this.map.invalidateSize(true); } catch { }
+        }, 250);
+      }
+
+      destroy() {
+        try {
+          if (this.map) this.map.remove();
+        } catch { }
+        this.map = null;
+        this.routeLayer = null;
+        this.positionMarker = null;
+        this._initialized = false;
+      }
+    }
+
+    /** -----------------------------
+     *  SESSION SERVICE
+     *  ----------------------------- */
+    class SessionService {
+      hasResumableSession() {
+        return State.restore() && !!State.destination;
+      }
+
+      applyMirroringFromState() {
+        const app = Dom.app();
+        if (State.mirrored) app.classList.add('mirrored');
+        else app.classList.remove('mirrored');
+      }
+
+      enterHUD() {
+        Dom.setup().style.display = 'none';
+        Dom.hud().classList.add('active');
+      }
+
+      exitHUD() {
+        Dom.hud().classList.remove('active');
+        Dom.setup().style.display = 'flex';
+      }
+    }
+
+    /** -----------------------------
+     *  NAVIGATION ENGINE
+     *  ----------------------------- */
+    class NavigationEngine {
+      constructor({
+        tracker = new LocationTracker(),
+        router = new Router(),
+        hud = new HUD(),
+        mapView = new MapView(),
+        deviceUX = new DeviceUXService(),
+        session = new SessionService()
+      } = {}) {
+        this.tracker = tracker;
+        this.router = router;
+        this.hud = hud;
+        this.mapView = mapView;
+        this.deviceUX = deviceUX;
+        this.session = session;
+
+        this.longPressTimer = null;
+        this._touchBound = false;
+        this._fsBound = false;
+        this._running = false;
+
+        this.deviceUX.onBecameVisible = () => {
+          if (this._running) State.save();
+          // also fix leaflet after returning
+          this.mapView.invalidateSizeSoon();
+        };
+        this.deviceUX.bindOnce();
+        this.deviceUX.lockLandscape();
+
+        // extra: if orientation changes, leaflet often needs re-measure
+        window.addEventListener('orientationchange', () => {
+          this.mapView.invalidateSizeSoon();
+        });
+      }
+
+      async start(destinationQuery) {
+        try {
+          const pos = await this.getCurrentPosition();
+          State.position = pos;
+
+          const dest = await this.router.geocode(destinationQuery);
+          await this._startWithDestination(pos, dest, destinationQuery);
+        } catch (err) {
+          alert('Fout bij starten navigatie: ' + (err && err.message ? err.message : err));
+        }
+      }
+
+      async resumeFromState() {
+        try {
+          if (!State.destination) throw new Error('Geen opgeslagen bestemming');
+          const pos = await this.getCurrentPosition();
+          State.position = pos;
+
+          await this._startWithDestination(pos, State.destination, State.destinationQuery || null);
+        } catch (err) {
+          alert('Fout bij hervatten navigatie: ' + (err && err.message ? err.message : err));
+        }
+      }
+
+      async _startWithDestination(currentPos, dest, destinationQueryOrNull) {
+        const route = await this.router.getRoute(currentPos, dest);
+        State.route = route;
+        State.destination = dest;
+        State.destinationQuery = destinationQueryOrNull;
+        State.currentStepIndex = Math.max(0, State.currentStepIndex || 0);
+
+        State.markDirty();
+        State.save(true);
+
+        this.session.applyMirroringFromState();
+
+        this.mapView.init();
+        this.mapView.setRoute(route);
+
+        this.tracker.start((data) => this.handleLocationUpdate(data));
+
+        this.deviceUX.requestWakeLock().catch(() => { });
+        this.deviceUX.lockLandscape();
+
+        this.setupTouchHandling();
+        this.setupFullscreenButton();
+
+        this.session.enterHUD();
+        this._running = true;
+
+        // ✅ Leaflet mobile fix: after HUD becomes visible
+        this.mapView.invalidateSizeSoon();
+
+        // Try fullscreen shortly after entering HUD
+        setTimeout(() => this.deviceUX.requestFullscreen(), 500);
+      }
+
+      getCurrentPosition() {
+        return new Promise((resolve, reject) => {
+          if (!('geolocation' in navigator)) {
+            reject(new Error('Geolocatie niet ondersteund'));
+            return;
+          }
+          navigator.geolocation.getCurrentPosition(
+            (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+            (err) => reject(err),
+            { enableHighAccuracy: true, timeout: 10000 }
+          );
+        });
+      }
+
+      getSteps() {
+        if (!State.route || !State.route.legs || !State.route.legs[0] || !State.route.legs[0].steps) return [];
+        return State.route.legs[0].steps;
+      }
+
+      handleLocationUpdate(data) {
+        State.position = data.position;
+        State.speed = data.speed;
+        State.heading = data.heading;
+
+        const steps = this.getSteps();
+        if (!steps.length) {
+          this.mapView.updatePosition(data.position.lat, data.position.lng, data.heading);
+          return;
+        }
+
+        const step = this.findCurrentStep(data.position, steps);
+        if (step) {
+          const distToManeuver = Geo.distanceMeters(
+            data.position,
+            { lat: step.maneuver.location[1], lng: step.maneuver.location[0] }
+          );
+          const totalRemaining = this.calculateRemainingDistance(steps);
+          const eta = data.speed > 0 ? totalRemaining / data.speed : null;
+
+          this.hud.update({
+            maneuver: step.maneuver,
+            distance: distToManeuver,
+            street: step.name || 'Naamloze weg',
+            speed: data.speed,
+            eta: eta,
+            remaining: totalRemaining
+          });
+        }
+
+        this.mapView.updatePosition(data.position.lat, data.position.lng, data.heading);
+        State.save();
+      }
+
+      findCurrentStep(position, steps) {
+        let minDist = Infinity;
+        let currentStep = steps[State.currentStepIndex] || steps[0];
+        let bestIndex = State.currentStepIndex;
+
+        const lookAhead = 12;
+        const start = Math.max(0, State.currentStepIndex);
+        const end = Math.min(steps.length, start + lookAhead);
+
+        for (let i = start; i < end; i++) {
+          const step = steps[i];
+          const p = { lat: step.maneuver.location[1], lng: step.maneuver.location[0] };
+          const dist = Geo.distanceMeters(position, p);
+
+          if (dist < minDist) {
+            minDist = dist;
+            currentStep = step;
+            bestIndex = i;
+          }
+        }
+
+        if (minDist < 20 && bestIndex >= State.currentStepIndex && State.currentStepIndex !== Math.min(bestIndex + 1, steps.length - 1)) {
+          State.currentStepIndex = Math.min(bestIndex + 1, steps.length - 1);
+          State.markDirty();
+        }
+
+        return currentStep;
+      }
+
+      calculateRemainingDistance(steps) {
+        let total = 0;
+        for (let i = State.currentStepIndex; i < steps.length; i++) total += steps[i].distance;
+        return total;
+      }
+
+      setupTouchHandling() {
+        if (this._touchBound) return;
+        this._touchBound = true;
+
+        const hudEl = Dom.hud();
+        const appEl = Dom.app();
+
+        let touchStartTime = 0;
+        let touchMoved = false;
+
+        hudEl.addEventListener('touchstart', () => {
+          touchStartTime = Date.now();
+          touchMoved = false;
+
+          this.longPressTimer = setTimeout(() => {
+            if (confirm('Navigatie stoppen?')) this.stop();
+          }, 2000);
+        }, { passive: true });
+
+        hudEl.addEventListener('touchmove', () => {
+          touchMoved = true;
+          clearTimeout(this.longPressTimer);
+        }, { passive: true });
+
+        hudEl.addEventListener('touchend', () => {
+          clearTimeout(this.longPressTimer);
+
+          const touchDuration = Date.now() - touchStartTime;
+          if (touchDuration < 300 && !touchMoved) {
+            State.mirrored = !State.mirrored;
+            State.markDirty();
+            State.save(true);
+
+            if (State.mirrored) appEl.classList.add('mirrored');
+            else appEl.classList.remove('mirrored');
+          }
+        }, { passive: true });
+      }
+
+      setupFullscreenButton() {
+        if (this._fsBound) return;
+        this._fsBound = true;
+
+        const btn = Dom.fullscreenBtn();
+
+        const updateBtn = () => this.deviceUX.updateFullscreenButtonVisibility(btn);
+        document.addEventListener('fullscreenchange', updateBtn);
+        document.addEventListener('webkitfullscreenchange', updateBtn);
+        updateBtn();
+
+        btn.addEventListener('click', () => {
+          this.deviceUX.requestFullscreen();
+          // after fullscreen transition: leaflet resize
+          this.mapView.invalidateSizeSoon();
+        });
+
+        document.addEventListener('keydown', (e) => {
+          if (e.key === 'F11') {
+            e.preventDefault();
+            this.deviceUX.requestFullscreen();
+            this.mapView.invalidateSizeSoon();
+          }
+        });
+      }
+
+      stop() {
+        this._running = false;
+        this.tracker.stop();
+        State.clear();
+
+        this.mapView.destroy();
+        this.session.exitHUD();
+
+        document.getElementById('distance').textContent = '--';
+        document.getElementById('streetName').textContent = '--';
+        document.getElementById('speed').textContent = '0';
+        document.getElementById('eta').textContent = '--:--';
+        document.getElementById('remaining').textContent = '-- km';
+
+        Dom.app().classList.remove('mirrored');
+      }
+    }
+
+    /** -----------------------------
+     *  APP INIT
+     *  ----------------------------- */
+    const deviceUX = new DeviceUXService();
+    const session = new SessionService();
+    const nav = new NavigationEngine({ deviceUX, session });
+
+    deviceUX.bindOnce();
+    deviceUX.lockLandscape();
+
+    // Voice input
+    Dom.voiceBtn().addEventListener('click', () => {
+      if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+        alert('Spraakherkenning niet ondersteund');
+        return;
+      }
+
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      const recognition = new SpeechRecognition();
+      recognition.lang = 'nl-NL';
+      recognition.continuous = false;
+
+      recognition.onresult = (event) => {
+        const transcript = event.results[0][0].transcript;
+        Dom.destinationInput().value = transcript;
+      };
+
+      recognition.onerror = (event) => {
+        alert('Spraakherkenning fout: ' + event.error);
+      };
+
+      recognition.start();
+    });
+
+    // Start navigation
+    Dom.startBtn().addEventListener('click', () => {
+      const dest = Dom.destinationInput().value.trim();
+      if (!dest) {
+        alert('Voer een bestemming in');
+        return;
+      }
+      State.currentStepIndex = 0;
+      nav.start(dest);
+    });
+
+    // Enter key to start
+    Dom.destinationInput().addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') Dom.startBtn().click();
+    });
+
+    // Restore session
+    if (session.hasResumableSession()) {
+      session.applyMirroringFromState();
+      if (confirm('Vorige navigatie hervatten?')) {
+        nav.resumeFromState();
+      } else {
+        State.clear();
+      }
+    }
+
+    // Keep button visibility accurate
+    document.addEventListener('fullscreenchange', () => deviceUX.updateFullscreenButtonVisibility(Dom.fullscreenBtn()));
+    document.addEventListener('webkitfullscreenchange', () => deviceUX.updateFullscreenButtonVisibility(Dom.fullscreenBtn()));
+  </script>
 </body>
 
 </html>
