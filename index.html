@@ -44,15 +44,19 @@
             transition: transform 0.3s ease;
         }
 
+        /* Mirror mode: flip horizontally - ALL content including text */
         #app.mirrored {
             transform: scaleX(-1);
         }
 
-        /* Only mirror icons and numbers, NOT street names */
-        #app.mirrored #maneuverIcon,
-        #app.mirrored #speedDisplay,
-        #app.mirrored #etaDisplay {
-            transform: scaleX(-1);
+        /* Rotated mode: 90 degrees clockwise */
+        #app.rotated {
+            transform: rotate(90deg);
+        }
+
+        /* Both mirrored AND rotated */
+        #app.mirrored.rotated {
+            transform: scaleX(-1) rotate(90deg);
         }
 
         /* Setup Screen */
@@ -392,6 +396,7 @@
             speed: 0,
             destination: null,
             mirrored: false,
+            rotated: false,
 
             save() {
                 localStorage.setItem('hudNav', JSON.stringify({
@@ -399,7 +404,8 @@
                     currentStepIndex: this.currentStepIndex,
                     destination: this.destination,
                     heading: this.heading,
-                    mirrored: this.mirrored
+                    mirrored: this.mirrored,
+                    rotated: this.rotated
                 }));
             },
 
@@ -412,6 +418,7 @@
                     this.destination = data.destination;
                     this.heading = data.heading || 0;
                     this.mirrored = data.mirrored || false;
+                    this.rotated = data.rotated || false;
                     return true;
                 }
                 return false;
@@ -423,6 +430,7 @@
                 this.currentStepIndex = 0;
                 this.destination = null;
                 this.mirrored = false;
+                this.rotated = false;
             }
         };
 
@@ -876,6 +884,7 @@
                 const app = document.getElementById('app');
                 let touchStartTime = 0;
                 let touchMoved = false;
+                let lastTapTime = 0;
 
                 hud.addEventListener('touchstart', (e) => {
                     touchStartTime = Date.now();
@@ -897,15 +906,35 @@
                     clearTimeout(this.longPressTimer);
 
                     const touchDuration = Date.now() - touchStartTime;
+                    const now = Date.now();
 
+                    // Short tap detected
                     if (touchDuration < 300 && !touchMoved) {
-                        State.mirrored = !State.mirrored;
-                        State.save();
+                        // Check for double tap (within 500ms)
+                        if (now - lastTapTime < 500) {
+                            // Double tap: toggle rotation
+                            State.rotated = !State.rotated;
+                            State.save();
 
-                        if (State.mirrored) {
-                            app.classList.add('mirrored');
+                            if (State.rotated) {
+                                app.classList.add('rotated');
+                            } else {
+                                app.classList.remove('rotated');
+                            }
+
+                            lastTapTime = 0; // Reset to prevent triple-tap
                         } else {
-                            app.classList.remove('mirrored');
+                            // Single tap: toggle mirror
+                            State.mirrored = !State.mirrored;
+                            State.save();
+
+                            if (State.mirrored) {
+                                app.classList.add('mirrored');
+                            } else {
+                                app.classList.remove('mirrored');
+                            }
+
+                            lastTapTime = now;
                         }
                     }
                 });
@@ -975,6 +1004,7 @@
                 State.clear();
                 document.getElementById('hud').classList.remove('active');
                 document.getElementById('setup').style.display = 'flex';
+                document.getElementById('app').classList.remove('mirrored', 'rotated');
                 location.reload();
             }
         }
@@ -1025,8 +1055,12 @@
 
         // Restore session
         if (State.restore() && State.route) {
+            const app = document.getElementById('app');
             if (State.mirrored) {
-                document.getElementById('app').classList.add('mirrored');
+                app.classList.add('mirrored');
+            }
+            if (State.rotated) {
+                app.classList.add('rotated');
             }
 
             if (confirm('Vorige navigatie hervatten?')) {
@@ -1036,28 +1070,12 @@
             }
         }
 
-        // Force landscape orientation
-        const lockOrientation = () => {
-            if (screen.orientation && screen.orientation.lock) {
-                screen.orientation.lock('landscape').catch(() => { });
-            } else if (screen.lockOrientation) {
-                screen.lockOrientation('landscape');
-            } else if (screen.mozLockOrientation) {
-                screen.mozLockOrientation('landscape');
-            } else if (screen.msLockOrientation) {
-                screen.msLockOrientation('landscape');
-            }
-        };
-
-        lockOrientation();
-        document.addEventListener('fullscreenchange', lockOrientation);
-        document.addEventListener('webkitfullscreenchange', lockOrientation);
+        // No longer forcing landscape orientation - allow any orientation
 
         // Prevent sleep and maintain fullscreen
         document.addEventListener('visibilitychange', () => {
             if (document.visibilityState === 'visible' && State.route) {
                 State.save();
-                lockOrientation();
             }
         });
     </script>
