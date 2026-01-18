@@ -122,10 +122,9 @@
     #map{
       width:100%;
       height:100%;
-      /* NOTE: CSS filter removed on request. B/W comes from the tile source. */
       transform: translateZ(0);
     }
-    /* optional dim overlay so HUD stays readable */
+    /* dim overlay so HUD stays readable */
     #mapDim{
       position:absolute;
       inset:0;
@@ -163,7 +162,7 @@
       color:var(--muted);
       padding:0 16px;
       text-align:center;
-      max-width:min(92vw, 680px);
+      max-width:min(92vw, 720px);
     }
 
     /* Top bar above everything */
@@ -247,7 +246,9 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
 (() => {
-  // PWA SW
+  // --------------------------
+  // PWA SW (optional, but recommended)
+  // --------------------------
   if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("./sw.js").catch(() => {});
   }
@@ -264,6 +265,13 @@
 
   // Zwart-wit tiles (gratis) -> geen CSS filter nodig
   const BW_TILES = "https://tiles.wmflabs.org/bw-mapnik/{z}/{x}/{y}.png";
+
+  // Persisted session state (prevents "route disappears" after reload/tab-kill)
+  const STATE_KEY = "hudnav_state_v1";
+  let lastStateSave = 0;
+
+  // Wake Lock (prevents sleep -> less chance Chrome kills the tab)
+  let wakeLock = null;
 
   // --------------------------
   // DOM
@@ -301,12 +309,68 @@
   let routePts = [];
   let wpIdx = 0;
 
-  // NEW: OSRM steps (street names / maneuvers)
-  // We keep a list of "step anchors" so we can show a relevant street name while driving.
+  // OSRM steps (street names / maneuvers)
   let routeSteps = []; // [{name, lat, lon, type, modifier}]
 
   // Leaflet
   let map = null, posMarker = null, routeLine = null, wpMarker = null;
+
+  // --------------------------
+  // Persistence
+  // --------------------------
+  function saveState() {
+    const state = {
+      t: Date.now(),
+      routePts,
+      routeSteps,
+      wpIdx,
+      addr: addrInput.value || "",
+      debugMapEnabled,
+      mirrored,
+      quarterTurn
+    };
+    try {
+      localStorage.setItem(STATE_KEY, JSON.stringify(state));
+    } catch {}
+  }
+
+  function loadState() {
+    try {
+      const raw = localStorage.getItem(STATE_KEY);
+      if (!raw) return null;
+      const s = JSON.parse(raw);
+      if (!s || !Array.isArray(s.routePts) || s.routePts.length < 2) return null;
+      return s;
+    } catch {
+      return null;
+    }
+  }
+
+  function clearState() {
+    try { localStorage.removeItem(STATE_KEY); } catch {}
+  }
+
+  // --------------------------
+  // Wake Lock
+  // --------------------------
+  async function requestWakeLock() {
+    try {
+      if ("wakeLock" in navigator) {
+        wakeLock = await navigator.wakeLock.request("screen");
+      }
+    } catch {}
+  }
+
+  function releaseWakeLock() {
+    try { wakeLock?.release(); } catch {}
+    wakeLock = null;
+  }
+
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible" && hudScreen.classList.contains("active")) {
+      requestWakeLock();
+    }
+  });
 
   // --------------------------
   // Helpers
@@ -355,7 +419,7 @@
   }
 
   // --------------------------
-  // Street helper (NEW)
+  // Street helper
   // --------------------------
   function nearestStep(cur) {
     if (!routeSteps.length) return null;
@@ -453,7 +517,6 @@
     return { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon) };
   }
 
-  // NEW: steps=true + fill routeSteps
   async function fetchOsrmRoute(start, end) {
     const url = `${OSRM_BASE}/route/v1/driving/${start.lon},${start.lat};${end.lon},${end.lat}?overview=full&geometries=geojson&steps=true`;
     const r = await fetch(url);
@@ -461,8 +524,6 @@
     if (!data || data.code !== "Ok") throw new Error("OSRM route faalde.");
 
     const route = data.routes[0];
-
-    // geometry coords: [lon,lat]
     const coords = route.geometry.coordinates.map(c => ({ lon: c[0], lat: c[1] }));
 
     // Extract step anchors (street name + maneuver location)
@@ -474,7 +535,7 @@
         const loc = s.maneuver && Array.isArray(s.maneuver.location) ? s.maneuver.location : null;
         if (loc) {
           routeSteps.push({
-            name: name, // can be null
+            name: name,
             lon: loc[0],
             lat: loc[1],
             type: s.maneuver?.type || null,
@@ -482,7 +543,7 @@
           });
         }
       }
-      // Optional: collapse duplicates (same name consecutive)
+      // collapse duplicates
       const compact = [];
       for (const st of routeSteps) {
         const prev = compact[compact.length - 1];
@@ -589,13 +650,18 @@
 
     const kmh = Math.max(0, Math.round(speedMps * 3.6));
 
-    // NEW: street name display
     const step = nearestStep(cur);
     const street = step && step.name ? step.name : null;
     const streetTxt = street ? ` • ${street}` : "";
 
-    statusEl.textContent =
-      `WP ${wpIdx+1}/${routePts.length} | ${kmh} km/h${streetTxt}`;
+    statusEl.textContent = `WP ${wpIdx+1}/${routePts.length} | ${kmh} km/h${streetTxt}`;
+
+    // Persist state every ~2s while navigating (prevents losing route on reload)
+    const now = Date.now();
+    if (now - lastStateSave > 2000) {
+      saveState();
+      lastStateSave = now;
+    }
 
     // Map update
     if (debugMapEnabled && map) {
@@ -654,6 +720,7 @@
 
     applyStageTransform();
     requestFullscreenBestEffort();
+    requestWakeLock();
 
     // tap anywhere toggles mirror
     hudScreen.onclick = () => toggleMirror();
@@ -668,11 +735,13 @@
   function toggleMirror() {
     mirrored = !mirrored;
     applyStageTransform();
+    saveState();
   }
 
   function toggleQuarterTurn() {
     quarterTurn = !quarterTurn;
     applyStageTransform();
+    saveState();
   }
 
   function toggleMapPane() {
@@ -681,6 +750,7 @@
     mapPane.style.display = (hudScreen.classList.contains("active") && debugMapEnabled) ? "block" : "none";
     if (debugMapEnabled) ensureMap();
     applyStageTransform();
+    saveState();
   }
 
   // SpeechRecognition
@@ -706,6 +776,7 @@
       const txt = e.results[0][0].transcript;
       addrInput.value = txt;
       startStatus.textContent = `Herkenning: "${txt}" (pas aan indien nodig)`;
+      saveState();
     };
     rec.onerror = (e) => {
       startStatus.textContent = `Spraakfout: ${e.error}. Typ het adres.`;
@@ -720,6 +791,8 @@
     const q = addrInput.value.trim();
     if (!q) { startStatus.textContent = "Vul of spreek eerst een adres in."; return; }
 
+    startBtn.disabled = true;
+    startBtn.textContent = "Bezig…";
     startStatus.textContent = "Locatie opvragen… (sta toe in je browser)";
     gpsPill.textContent = "GPS: …";
 
@@ -737,6 +810,8 @@
       routePts = resampleRoute(rawRoute, LOOKAHEAD_STEP_M);
       wpIdx = 0;
 
+      saveState();
+
       showHud();
       drawRouteOnMap(routePts);
       startUiLoop();
@@ -744,6 +819,9 @@
     } catch (e) {
       startStatus.textContent = `Fout: ${e.message || e}`;
       try { stopWatch(); } catch {}
+    } finally {
+      startBtn.disabled = false;
+      startBtn.textContent = "Start navigatie";
     }
   }
 
@@ -759,14 +837,21 @@
 
   function stopAll() {
     stopWatch();
+    releaseWakeLock();
+
     routePts = [];
-    routeSteps = []; // NEW reset
+    routeSteps = [];
     wpIdx = 0;
     headingDeg = null;
     lastFix = null;
     speedMps = 0;
+
     if (uiTimer) clearInterval(uiTimer);
     uiTimer = null;
+
+    // Clear persisted state (fresh start)
+    clearState();
+
     showStart();
     startStatus.textContent = "Gestopt. Je kunt een nieuw adres spreken of typen.";
   }
@@ -787,9 +872,38 @@
   hudScreen.addEventListener("touchstart", () => { lpTimer = setTimeout(() => stopAll(), 900); }, {passive:true});
   hudScreen.addEventListener("touchend", () => { if (lpTimer) clearTimeout(lpTimer); lpTimer = null; }, {passive:true});
 
-  startStatus.textContent = speechSupported()
-    ? "Tip: Spreek adres. Sta locatie toe. In HUD: tik = spiegeling, ⤾ = kwartslag, 🗺 = kaart."
-    : "Spraak niet ondersteund in deze browser. Typ het adres. Sta locatie toe.";
+  // --------------------------
+  // Restore previous session if available
+  // --------------------------
+  const restored = loadState();
+  if (restored) {
+    routePts = restored.routePts;
+    routeSteps = restored.routeSteps || [];
+    wpIdx = Math.max(0, Math.min(restored.wpIdx || 0, routePts.length - 1));
+    addrInput.value = restored.addr || "";
+    debugMapEnabled = !!restored.debugMapEnabled;
+    mirrored = !!restored.mirrored;
+    quarterTurn = !!restored.quarterTurn;
+
+    debugBtn.textContent = debugMapEnabled ? "Kaart: aan" : "Kaart: uit";
+    applyStageTransform();
+
+    // If we have a route, resume HUD
+    try {
+      startWatch();
+      showHud();
+      if (debugMapEnabled) {
+        mapPane.style.display = "block";
+        drawRouteOnMap(routePts);
+      }
+      startUiLoop();
+      startStatus.textContent = "Vorige sessie hersteld.";
+    } catch {}
+  } else {
+    startStatus.textContent = speechSupported()
+      ? "Tip: Spreek adres. Sta locatie toe. In HUD: tik = spiegeling, ⤾ = kwartslag, 🗺 = kaart."
+      : "Spraak niet ondersteund in deze browser. Typ het adres. Sta locatie toe.";
+  }
 
   applyStageTransform();
 })();
