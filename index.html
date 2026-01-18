@@ -7,10 +7,12 @@
         content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-fullscreen">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#000000">
+    <meta name="format-detection" content="telephone=no">
     <title>Head-Up Navigator</title>
     <link rel="manifest"
-        href="data:application/json;base64,eyJuYW1lIjoiSGVhZC1VcCBOYXZpZ2F0b3IiLCJzaG9ydF9uYW1lIjoiSFVEIE5hdiIsInN0YXJ0X3VybCI6Ii8iLCJkaXNwbGF5Ijoic3RhbmRhbG9uZSIsImJhY2tncm91bmRfY29sb3IiOiIjMDAwMDAwIiwidGhlbWVfY29sb3IiOiIjMDAwMDAwIiwib3JpZW50YXRpb24iOiJsYW5kc2NhcGUiLCJpY29ucyI6W3sic3JjIjoiZGF0YTppbWFnZS9zdmcreG1sLCUzQ3N2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHZpZXdCb3g9JzAgMCAxMDAgMTAwJyUzRSUzQ3JlY3Qgd2lkdGg9JzEwMCcgaGVpZ2h0PScxMDAnIGZpbGw9JyUyMzAwMCcvJTNFJTNDcGF0aCBkPSdNNTAgMjBMNzAgNTBINTVWODBINDVWNTBIMzBaJyBmaWxsPSclMjNmZmYnLyUzRSUzQy9zdmclM0UiLCJzaXplcyI6IjE5MngxOTIiLCJ0eXBlIjoiaW1hZ2Uvc3ZnK3htbCJ9XX0=">
+        href="data:application/json;base64,eyJuYW1lIjoiSGVhZC1VcCBOYXZpZ2F0b3IiLCJzaG9ydF9uYW1lIjoiSFVEIE5hdiIsInN0YXJ0X3VybCI6Ii8iLCJkaXNwbGF5IjoiZnVsbHNjcmVlbiIsImJhY2tncm91bmRfY29sb3IiOiIjMDAwMDAwIiwidGhlbWVfY29sb3IiOiIjMDAwMDAwIiwib3JpZW50YXRpb24iOiJsYW5kc2NhcGUiLCJpY29ucyI6W3sic3JjIjoiZGF0YTppbWFnZS9zdmcreG1sLCUzQ3N2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHZpZXdCb3g9JzAgMCAxMDAgMTAwJyUzRSUzQ3JlY3Qgd2lkdGg9JzEwMCcgaGVpZ2h0PScxMDAnIGZpbGw9JyUyMzAwMCcvJTNFJTNDcGF0aCBkPSdNNTAgMjBMNzAgNTBINTVWODBINDVWNTBIMzBaJyBmaWxsPSclMjNmZmYnLyUzRSUzQy9zdmclM0UiLCJzaXplcyI6IjE5MngxOTIiLCJ0eXBlIjoiaW1hZ2Uvc3ZnK3htbCJ9XX0=">
     <style>
         * {
             margin: 0;
@@ -30,6 +32,8 @@
             touch-action: none;
             user-select: none;
             -webkit-user-select: none;
+            position: fixed;
+            overscroll-behavior: none;
         }
 
         #app {
@@ -37,6 +41,18 @@
             height: 100%;
             display: flex;
             flex-direction: column;
+            transition: transform 0.3s ease;
+        }
+
+        #app.mirrored {
+            transform: scaleX(-1);
+        }
+
+        #app.mirrored #maneuverIcon,
+        #app.mirrored #speedDisplay,
+        #app.mirrored #etaDisplay,
+        #app.mirrored #streetName {
+            transform: scaleX(-1);
         }
 
         /* Setup Screen */
@@ -102,6 +118,30 @@
 
         #hud.active {
             display: flex;
+        }
+
+        @media (orientation: portrait) {
+            #hud {
+                flex-direction: column;
+            }
+
+            #navPanel,
+            #mapPanel {
+                flex: 1;
+                min-height: 50%;
+            }
+        }
+
+        @media (orientation: landscape) {
+            #hud {
+                flex-direction: row;
+            }
+
+            #navPanel,
+            #mapPanel {
+                flex: 1;
+                min-width: 50%;
+            }
         }
 
         /* Left Panel - Navigation Info */
@@ -190,7 +230,7 @@
         #map {
             width: 100%;
             height: 100%;
-            filter: grayscale(100%) contrast(1.2) brightness(0.4);
+            filter: grayscale(80%) contrast(1.3) brightness(0.7);
         }
 
         .leaflet-container {
@@ -202,10 +242,6 @@
         }
 
         /* Roundabout Icon */
-        .roundabout-icon {
-            position: relative;
-        }
-
         .roundabout-circle {
             stroke: #fff;
             stroke-width: 3;
@@ -223,16 +259,6 @@
             font-size: 24px;
             font-weight: bold;
             text-anchor: middle;
-        }
-
-        /* Loading State */
-        .loading {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            font-size: 1.5rem;
-            color: #666;
         }
     </style>
 </head>
@@ -277,10 +303,7 @@
     <script>
         'use strict';
 
-        // ============================================================================
         // STATE MANAGEMENT
-        // ============================================================================
-
         const State = {
             route: null,
             currentStepIndex: 0,
@@ -288,15 +311,15 @@
             heading: 0,
             speed: 0,
             destination: null,
-            eta: null,
-            remainingDistance: 0,
+            mirrored: false,
 
             save() {
                 localStorage.setItem('hudNav', JSON.stringify({
                     route: this.route,
                     currentStepIndex: this.currentStepIndex,
                     destination: this.destination,
-                    heading: this.heading
+                    heading: this.heading,
+                    mirrored: this.mirrored
                 }));
             },
 
@@ -308,6 +331,7 @@
                     this.currentStepIndex = data.currentStepIndex;
                     this.destination = data.destination;
                     this.heading = data.heading || 0;
+                    this.mirrored = data.mirrored || false;
                     return true;
                 }
                 return false;
@@ -318,13 +342,11 @@
                 this.route = null;
                 this.currentStepIndex = 0;
                 this.destination = null;
+                this.mirrored = false;
             }
         };
 
-        // ============================================================================
         // GPS & HEADING
-        // ============================================================================
-
         class LocationTracker {
             constructor() {
                 this.watchId = null;
@@ -332,7 +354,7 @@
                 this.speedBuffer = [];
                 this.headingBuffer = [];
                 this.compassHeading = 0;
-                this.minSpeedForGPSHeading = 2; // m/s (~7 km/h)
+                this.minSpeedForGPSHeading = 2;
             }
 
             start(callback) {
@@ -371,7 +393,6 @@
                     speed: pos.coords.speed || 0
                 };
 
-                // Calculate speed
                 let speed = current.speed;
                 if (this.lastPosition && !speed) {
                     const dist = this.distance(this.lastPosition, current);
@@ -383,7 +404,6 @@
                 if (this.speedBuffer.length > 5) this.speedBuffer.shift();
                 const avgSpeed = this.speedBuffer.reduce((a, b) => a + b, 0) / this.speedBuffer.length;
 
-                // Calculate heading
                 let heading = this.compassHeading;
                 if (this.lastPosition && avgSpeed > this.minSpeedForGPSHeading) {
                     heading = this.bearing(this.lastPosition, current);
@@ -446,10 +466,7 @@
             }
         }
 
-        // ============================================================================
         // ROUTING
-        // ============================================================================
-
         class Router {
             async geocode(query) {
                 const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&countrycodes=nl&limit=1`;
@@ -468,10 +485,7 @@
             }
         }
 
-        // ============================================================================
         // UI RENDERING
-        // ============================================================================
-
         class HUD {
             constructor() {
                 this.maneuverIcon = document.getElementById('maneuverIcon');
@@ -481,7 +495,7 @@
                 this.eta = document.getElementById('eta');
                 this.remaining = document.getElementById('remaining');
                 this.lastUpdate = 0;
-                this.updateThrottle = 500; // ms
+                this.updateThrottle = 500;
             }
 
             update(data) {
@@ -580,10 +594,7 @@
             }
         }
 
-        // ============================================================================
         // MAP
-        // ============================================================================
-
         class MapView {
             constructor() {
                 this.map = null;
@@ -643,10 +654,7 @@
             }
         }
 
-        // ============================================================================
         // NAVIGATION ENGINE
-        // ============================================================================
-
         class NavigationEngine {
             constructor() {
                 this.tracker = new LocationTracker();
@@ -658,34 +666,28 @@
 
             async start(destination) {
                 try {
-                    // Get current position
+                    // Request fullscreen immediately
+                    this.requestFullscreen();
+
                     const pos = await this.getCurrentPosition();
                     State.position = pos;
 
-                    // Geocode destination
                     const dest = await this.router.geocode(destination);
                     State.destination = dest;
 
-                    // Get route
                     const route = await this.router.getRoute(pos, dest);
                     State.route = route;
                     State.currentStepIndex = 0;
                     State.save();
 
-                    // Initialize map
                     this.mapView.init();
                     this.mapView.setRoute(route);
 
-                    // Start tracking
                     this.tracker.start((data) => this.handleLocationUpdate(data));
 
-                    // Enable wake lock
                     this.requestWakeLock();
+                    this.setupTouchHandling();
 
-                    // Setup long-press to stop
-                    this.setupLongPress();
-
-                    // Show HUD
                     document.getElementById('setup').style.display = 'none';
                     document.getElementById('hud').classList.add('active');
 
@@ -712,7 +714,6 @@
 
                 if (!State.route) return;
 
-                // Find current step
                 const step = this.findCurrentStep(data.position);
                 if (step) {
                     const distToManeuver = this.distanceToPoint(data.position, step.maneuver.location);
@@ -788,10 +789,16 @@
                 return total;
             }
 
-            setupLongPress() {
+            setupTouchHandling() {
                 const hud = document.getElementById('hud');
+                const app = document.getElementById('app');
+                let touchStartTime = 0;
+                let touchMoved = false;
 
                 hud.addEventListener('touchstart', (e) => {
+                    touchStartTime = Date.now();
+                    touchMoved = false;
+
                     this.longPressTimer = setTimeout(() => {
                         if (confirm('Navigatie stoppen?')) {
                             this.stop();
@@ -799,23 +806,51 @@
                     }, 2000);
                 });
 
-                hud.addEventListener('touchend', () => {
+                hud.addEventListener('touchmove', () => {
+                    touchMoved = true;
                     clearTimeout(this.longPressTimer);
                 });
 
-                hud.addEventListener('touchmove', () => {
+                hud.addEventListener('touchend', (e) => {
                     clearTimeout(this.longPressTimer);
+
+                    const touchDuration = Date.now() - touchStartTime;
+
+                    if (touchDuration < 300 && !touchMoved) {
+                        State.mirrored = !State.mirrored;
+                        State.save();
+
+                        if (State.mirrored) {
+                            app.classList.add('mirrored');
+                        } else {
+                            app.classList.remove('mirrored');
+                        }
+                    }
                 });
+            }
+
+            requestFullscreen() {
+                const elem = document.documentElement;
+                if (elem.requestFullscreen) {
+                    elem.requestFullscreen().catch(() => { });
+                } else if (elem.webkitRequestFullscreen) {
+                    elem.webkitRequestFullscreen();
+                } else if (elem.mozRequestFullScreen) {
+                    elem.mozRequestFullScreen();
+                } else if (elem.msRequestFullscreen) {
+                    elem.msRequestFullscreen();
+                }
             }
 
             async requestWakeLock() {
                 try {
                     if ('wakeLock' in navigator) {
-                        const wakeLock = await navigator.wakeLock.request('screen');
+                        await navigator.wakeLock.request('screen');
 
                         document.addEventListener('visibilitychange', async () => {
                             if (document.visibilityState === 'visible') {
                                 await navigator.wakeLock.request('screen');
+                                this.requestFullscreen();
                             }
                         });
                     }
@@ -833,10 +868,7 @@
             }
         }
 
-        // ============================================================================
         // APP INITIALIZATION
-        // ============================================================================
-
         const nav = new NavigationEngine();
 
         // Voice input
@@ -882,6 +914,10 @@
 
         // Restore session
         if (State.restore() && State.route) {
+            if (State.mirrored) {
+                document.getElementById('app').classList.add('mirrored');
+            }
+
             if (confirm('Vorige navigatie hervatten?')) {
                 nav.start(State.destination.lat + ',' + State.destination.lng);
             } else {
@@ -889,15 +925,28 @@
             }
         }
 
-        // Force landscape
-        if (screen.orientation && screen.orientation.lock) {
-            screen.orientation.lock('landscape').catch(() => { });
-        }
+        // Force landscape orientation
+        const lockOrientation = () => {
+            if (screen.orientation && screen.orientation.lock) {
+                screen.orientation.lock('landscape').catch(() => { });
+            } else if (screen.lockOrientation) {
+                screen.lockOrientation('landscape');
+            } else if (screen.mozLockOrientation) {
+                screen.mozLockOrientation('landscape');
+            } else if (screen.msLockOrientation) {
+                screen.msLockOrientation('landscape');
+            }
+        };
 
-        // Prevent sleep
+        lockOrientation();
+        document.addEventListener('fullscreenchange', lockOrientation);
+        document.addEventListener('webkitfullscreenchange', lockOrientation);
+
+        // Prevent sleep and maintain fullscreen
         document.addEventListener('visibilitychange', () => {
             if (document.visibilityState === 'visible' && State.route) {
                 State.save();
+                lockOrientation();
             }
         });
     </script>
