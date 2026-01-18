@@ -108,7 +108,7 @@
             color: #fff;
         }
 
-        /* HUD Screen */
+        /* HUD Screen - Always horizontal layout */
         #hud {
             display: none;
             width: 100%;
@@ -120,28 +120,30 @@
             display: flex;
         }
 
-        @media (orientation: portrait) {
-            #hud {
-                flex-direction: column;
-            }
-
-            #navPanel,
-            #mapPanel {
-                flex: 1;
-                min-height: 50%;
-            }
+        /* Fullscreen button */
+        #fullscreenBtn {
+            position: fixed;
+            top: 1rem;
+            right: 1rem;
+            padding: 0.75rem 1.5rem;
+            background: rgba(255, 255, 255, 0.1);
+            color: #fff;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            z-index: 1000;
+            backdrop-filter: blur(10px);
+            transition: all 0.2s;
         }
 
-        @media (orientation: landscape) {
-            #hud {
-                flex-direction: row;
-            }
+        #fullscreenBtn:hover {
+            background: rgba(255, 255, 255, 0.2);
+            border-color: rgba(255, 255, 255, 0.5);
+        }
 
-            #navPanel,
-            #mapPanel {
-                flex: 1;
-                min-width: 50%;
-            }
+        #fullscreenBtn.hidden {
+            display: none;
         }
 
         /* Left Panel - Navigation Info */
@@ -275,6 +277,7 @@
 
         <!-- HUD Screen -->
         <div id="hud">
+            <button id="fullscreenBtn">⛶ Volledig scherm</button>
             <div id="navPanel">
                 <div id="maneuverSection">
                     <svg id="maneuverIcon" viewBox="0 0 100 100"></svg>
@@ -666,9 +669,6 @@
 
             async start(destination) {
                 try {
-                    // Request fullscreen immediately
-                    this.requestFullscreen();
-
                     const pos = await this.getCurrentPosition();
                     State.position = pos;
 
@@ -687,9 +687,13 @@
 
                     this.requestWakeLock();
                     this.setupTouchHandling();
+                    this.setupFullscreenButton();
 
                     document.getElementById('setup').style.display = 'none';
                     document.getElementById('hud').classList.add('active');
+
+                    // Request fullscreen immediately
+                    setTimeout(() => this.requestFullscreen(), 500);
 
                 } catch (err) {
                     alert('Fout bij starten navigatie: ' + err.message);
@@ -825,6 +829,35 @@
                         } else {
                             app.classList.remove('mirrored');
                         }
+                    }
+                });
+            }
+
+            setupFullscreenButton() {
+                const btn = document.getElementById('fullscreenBtn');
+
+                // Hide button when in fullscreen
+                const updateButtonVisibility = () => {
+                    if (document.fullscreenElement || document.webkitFullscreenElement) {
+                        btn.classList.add('hidden');
+                    } else {
+                        btn.classList.remove('hidden');
+                    }
+                };
+
+                document.addEventListener('fullscreenchange', updateButtonVisibility);
+                document.addEventListener('webkitfullscreenchange', updateButtonVisibility);
+
+                // Click handler
+                btn.addEventListener('click', () => {
+                    this.requestFullscreen();
+                });
+
+                // F11 key support
+                document.addEventListener('keydown', (e) => {
+                    if (e.key === 'F11') {
+                        e.preventDefault();
+                        this.requestFullscreen();
                     }
                 });
             }
