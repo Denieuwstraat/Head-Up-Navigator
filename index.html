@@ -1,0 +1,1108 @@
+<!doctype html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>HUD Navigator (OSRM)</title>
+
+  <!-- PWA / fullscreen hints -->
+  <meta name="theme-color" content="#000000">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="HUD Nav">
+  <link rel="manifest" href="manifest.webmanifest">
+
+  <style>
+    :root { --bg:#000000; --fg:#ffffff; --muted:#9aa0a6; }
+
+    html,body{
+      height:100%;
+      margin:0;
+      background:var(--bg);
+      color:var(--fg);
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial;
+      overscroll-behavior:none;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .screen{ display:none; height:100dvh; width:100vw; }
+    .screen.active{ display:flex; }
+
+    /* START */
+    #start{
+      flex-direction:column;
+      align-items:center;
+      justify-content:center;
+      gap:14px;
+      padding:18px;
+    }
+
+    .bigbtn{
+      width:min(520px, 92vw);
+      height:min(44dvh, 320px);
+      border-radius:22px;
+      border:2px solid #2a2a2a;
+      background: color-mix(in srgb, var(--bg) 80%, #111 20%);
+      color:var(--fg);
+      font-size:28px;
+      font-weight:900;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      text-align:center;
+      user-select:none;
+      touch-action: manipulation;
+      letter-spacing:0.2px;
+    }
+
+    .row{ width:min(520px, 92vw); display:flex; gap:10px; }
+    input[type="text"]{
+      flex:1;
+      padding:14px 14px;
+      border-radius:14px;
+      border:1px solid #2a2a2a;
+      background: color-mix(in srgb, var(--bg) 80%, #111 20%);
+      color:var(--fg);
+      font-size:16px;
+      font-weight:650;
+    }
+    button{
+      padding:14px 14px;
+      border-radius:14px;
+      border:1px solid #2a2a2a;
+      background: color-mix(in srgb, var(--bg) 78%, #222 22%);
+      color:var(--fg);
+      font-size:16px;
+      font-weight:800;
+      touch-action: manipulation;
+    }
+    button:active, .bigbtn:active{ transform: scale(0.99); }
+
+    .small{
+      color:var(--muted);
+      font-size:13px;
+      line-height:1.35;
+      text-align:center;
+      width:min(520px, 92vw);
+    }
+
+    /* HUD */
+    #hud{
+      position:relative;
+      align-items:center;
+      justify-content:center;
+      flex-direction:column;
+      overflow:hidden;
+      background:var(--bg);
+    }
+
+    #hudStage{ position:absolute; inset:0; z-index:1; }
+
+    #hudStageInner{
+      position:absolute;
+      left:50%;
+      top:50%;
+      width:100%;
+      height:100%;
+      transform: translate(-50%, -50%) rotate(var(--rot, 0deg)) scaleX(var(--mx, 1));
+      transform-origin: center;
+    }
+
+    #hud.quarterturn #hudStageInner{ width:100dvh; height:100vw; }
+
+    /* ----- Map as BACKGROUND layer ----- */
+    #mapPane{
+      position:absolute;
+      inset:0;
+      background:var(--bg);
+      z-index:0;
+      display:none;
+      overflow:hidden;
+    }
+    #map{ width:100%; height:100%; transform: translateZ(0); }
+    #mapDim{
+      position:absolute;
+      inset:0;
+      background: rgba(0,0,0,0.45);
+      pointer-events:none;
+    }
+
+    /* ----- HUD content layer (always on top) ----- */
+    #hudContent{
+      position:absolute;
+      inset:0;
+      z-index:2;
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      justify-content:center;
+      gap:10px;
+      pointer-events:none;
+    }
+
+    #arrowWrap{
+      width:min(72vw, 460px);
+      height:min(44dvh, 360px);
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      filter: drop-shadow(0 2px 8px rgba(0,0,0,0.6));
+    }
+
+    #meters{
+      font-size: clamp(52px, 8vw, 104px);
+      font-weight:1000;
+      letter-spacing:0.6px;
+      line-height:1;
+    }
+
+    #status{
+      font-size: clamp(16px, 2.4vw, 22px);
+      color: var(--fg);
+      font-weight:850;
+      padding:0 16px;
+      text-align:center;
+      max-width:min(92vw, 840px);
+      letter-spacing:0.2px;
+      text-shadow: 0 2px 10px rgba(0,0,0,0.7);
+    }
+
+    #status strong{
+      font-weight:1000;
+      letter-spacing:0.3px;
+    }
+
+    #status .muted{
+      color: var(--muted);
+      font-weight:750;
+    }
+
+    /* Top bar (auto-hide) */
+    #topBar{
+      position:absolute;
+      top: env(safe-area-inset-top);
+      left:0; right:0;
+      padding: 10px 12px;
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      gap:10px;
+      z-index:10;
+
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+      transition: opacity .18s ease, visibility .18s ease;
+    }
+    #hud.controls-visible #topBar{
+      opacity: 1;
+      visibility: visible;
+      pointer-events: auto;
+    }
+
+    .pill{
+      padding:10px 12px;
+      border:1px solid #2a2a2a;
+      border-radius:999px;
+      background: color-mix(in srgb, var(--bg) 75%, #111 25%);
+      font-size:14px;
+      color:var(--fg);
+      user-select:none;
+      pointer-events:auto;
+      font-weight:850;
+      letter-spacing:0.2px;
+      display:flex;
+      align-items:center;
+      gap:8px;
+      white-space:nowrap;
+    }
+    .pill.muted{ color:var(--muted); font-weight:800; }
+    #mapToggle, #rotToggle, #mirrorToggle{ cursor:pointer; }
+
+    /* Color pickers inside pills */
+    .colorPick{
+      width:26px;
+      height:26px;
+      border:none;
+      padding:0;
+      background:transparent;
+      border-radius:8px;
+      overflow:hidden;
+      cursor:pointer;
+      -webkit-appearance:none;
+      appearance:none;
+    }
+    .colorPick::-webkit-color-swatch-wrapper{ padding:0; }
+    .colorPick::-webkit-color-swatch{ border:none; border-radius:8px; }
+    .colorPick::-moz-color-swatch{ border:none; border-radius:8px; }
+
+    /* Leaflet minimal */
+    .leaflet-control-attribution, .leaflet-control-zoom{ display:none !important; }
+  </style>
+
+  <!-- Leaflet -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+</head>
+<body>
+
+<div id="start" class="screen active">
+  <!-- ONE primary action -->
+  <div id="primaryBtn" class="bigbtn">▶ Start (spreek of typ)</div>
+
+  <div class="row">
+    <input id="addr" type="text" placeholder="Bestemming (bv. Coolsingel 1 Rotterdam)" autocomplete="off" />
+  </div>
+
+  <div id="startStatus" class="small">
+    Tip: sta Locatie toe. In HUD: tik op scherm = opties tonen.
+  </div>
+</div>
+
+<div id="hud" class="screen">
+  <div id="topBar">
+    <div class="pill" id="gpsPill">GPS: …</div>
+
+    <!-- NEW: theme controls (auto-hide with the bar) -->
+    <div class="pill muted" id="bgPill" title="Achtergrondkleur">
+      BG
+      <input id="bgPicker" class="colorPick" type="color" value="#000000" aria-label="Achtergrondkleur">
+    </div>
+    <div class="pill muted" id="fgPill" title="Tekst & pijl kleur">
+      FG
+      <input id="fgPicker" class="colorPick" type="color" value="#ffffff" aria-label="Tekst en pijl kleur">
+    </div>
+
+    <div class="pill muted" id="mirrorToggle">⇄</div>
+    <div class="pill muted" id="rotToggle">⤾ 90°</div>
+    <div class="pill muted" id="mapToggle">🗺</div>
+    <div class="pill muted" id="stopBtn">Stop</div>
+  </div>
+
+  <div id="hudStage">
+    <div id="hudStageInner">
+
+      <!-- Map background -->
+      <div id="mapPane">
+        <div id="map"></div>
+        <div id="mapDim"></div>
+      </div>
+
+      <!-- HUD foreground -->
+      <div id="hudContent">
+        <div id="arrowWrap"></div>
+        <div id="meters">-- m</div>
+        <div id="status">Wachten…</div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+(() => {
+  // --------------------------
+  // PWA SW (optional)
+  // --------------------------
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.register("./sw.js").catch(() => {});
+  }
+
+  // --------------------------
+  // Config
+  // --------------------------
+  const OSRM_BASE = "https://router.project-osrm.org";
+  const NOMINATIM = "https://nominatim.openstreetmap.org/search";
+  const ARRIVE_RADIUS_M = 80;
+  const LOOKAHEAD_STEP_M = 60;
+  const HEADING_MIN_SPEED_MPS = 4;
+  const UPDATE_UI_MS = 500;
+
+  const BW_TILES = "https://tiles.wmflabs.org/bw-mapnik/{z}/{x}/{y}.png";
+
+  const STATE_KEY = "hudnav_state_v1";
+  const THEME_KEY = "hudnav_theme_v1";
+  let lastStateSave = 0;
+
+  let wakeLock = null;
+
+  // --------------------------
+  // DOM
+  // --------------------------
+  const startScreen = document.getElementById("start");
+  const hudScreen   = document.getElementById("hud");
+
+  const primaryBtn  = document.getElementById("primaryBtn");
+  const addrInput   = document.getElementById("addr");
+  const startStatus = document.getElementById("startStatus");
+
+  const gpsPill       = document.getElementById("gpsPill");
+  const mirrorToggle  = document.getElementById("mirrorToggle");
+  const rotToggle     = document.getElementById("rotToggle");
+  const mapToggle     = document.getElementById("mapToggle");
+  const stopBtn       = document.getElementById("stopBtn");
+
+  const bgPicker      = document.getElementById("bgPicker");
+  const fgPicker      = document.getElementById("fgPicker");
+
+  const arrowWrap   = document.getElementById("arrowWrap");
+  const metersEl    = document.getElementById("meters");
+  const statusEl    = document.getElementById("status");
+  const mapPane     = document.getElementById("mapPane");
+
+  // --------------------------
+  // State
+  // --------------------------
+  let debugMapEnabled = true;
+  let mirrored = false;
+  let quarterTurn = false;
+
+  // Theme (bg + fg)
+  let themeBg = "#000000";
+  let themeFg = "#ffffff";
+
+  // Controls visibility (topBar auto-hide)
+  let controlsTimer = null;
+  const CONTROLS_HIDE_MS = 2600;
+
+  let watchId = null;
+  let lastFix = null;
+  let headingDeg = null;
+  let speedMps = 0;
+
+  let routePts = [];
+  let wpIdx = 0;
+
+  let routeSteps = []; // [{name, lat, lon, type, modifier}]
+
+  // Leaflet
+  let map = null, posMarker = null, routeLine = null, wpMarker = null;
+
+  // --------------------------
+  // Theme persistence/apply
+  // --------------------------
+  function applyTheme(bg, fg) {
+    themeBg = bg || themeBg;
+    themeFg = fg || themeFg;
+
+    document.documentElement.style.setProperty("--bg", themeBg);
+    document.documentElement.style.setProperty("--fg", themeFg);
+
+    // keep pickers in sync
+    if (bgPicker) bgPicker.value = themeBg;
+    if (fgPicker) fgPicker.value = themeFg;
+
+    try {
+      localStorage.setItem(THEME_KEY, JSON.stringify({bg: themeBg, fg: themeFg}));
+    } catch {}
+
+    // save into navigation state too (nice for “restore session”)
+    saveState();
+  }
+
+  function loadTheme() {
+    try {
+      const raw = localStorage.getItem(THEME_KEY);
+      if (!raw) return null;
+      const t = JSON.parse(raw);
+      if (!t) return null;
+      if (typeof t.bg === "string") themeBg = t.bg;
+      if (typeof t.fg === "string") themeFg = t.fg;
+      return {bg: themeBg, fg: themeFg};
+    } catch {
+      return null;
+    }
+  }
+
+  // --------------------------
+  // Persistence
+  // --------------------------
+  function saveState() {
+    const state = {
+      t: Date.now(),
+      routePts,
+      routeSteps,
+      wpIdx,
+      addr: addrInput.value || "",
+      debugMapEnabled,
+      mirrored,
+      quarterTurn,
+      themeBg,
+      themeFg
+    };
+    try { localStorage.setItem(STATE_KEY, JSON.stringify(state)); } catch {}
+  }
+
+  function loadState() {
+    try {
+      const raw = localStorage.getItem(STATE_KEY);
+      if (!raw) return null;
+      const s = JSON.parse(raw);
+      if (!s) return null;
+      return s;
+    } catch { return null; }
+  }
+
+  function clearState() {
+    try { localStorage.removeItem(STATE_KEY); } catch {}
+  }
+
+  // --------------------------
+  // Wake Lock
+  // --------------------------
+  async function requestWakeLock() {
+    try {
+      if ("wakeLock" in navigator) {
+        wakeLock = await navigator.wakeLock.request("screen");
+      }
+    } catch {}
+  }
+
+  function releaseWakeLock() {
+    try { wakeLock?.release(); } catch {}
+    wakeLock = null;
+  }
+
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible" && hudScreen.classList.contains("active")) {
+      requestWakeLock();
+    }
+  });
+
+  // --------------------------
+  // Helpers
+  // --------------------------
+  function applyStageTransform() {
+    hudScreen.style.setProperty("--mx", mirrored ? -1 : 1);
+    hudScreen.style.setProperty("--rot", quarterTurn ? "90deg" : "0deg");
+    hudScreen.classList.toggle("quarterturn", quarterTurn);
+
+    if (debugMapEnabled && map) {
+      setTimeout(() => { try { map.invalidateSize(true); } catch {} }, 80);
+    }
+  }
+
+  function requestFullscreenBestEffort() {
+    const el = document.documentElement;
+    const fn = el.requestFullscreen || el.webkitRequestFullscreen;
+    if (fn) { try { fn.call(el); } catch {} }
+  }
+
+  function showControls() {
+    hudScreen.classList.add("controls-visible");
+    if (controlsTimer) clearTimeout(controlsTimer);
+    controlsTimer = setTimeout(() => {
+      hudScreen.classList.remove("controls-visible");
+      controlsTimer = null;
+    }, CONTROLS_HIDE_MS);
+  }
+
+  function hideControls() {
+    hudScreen.classList.remove("controls-visible");
+    if (controlsTimer) clearTimeout(controlsTimer);
+    controlsTimer = null;
+  }
+
+  // --------------------------
+  // Math helpers
+  // --------------------------
+  const R = 6371000;
+  const toRad = d => d * Math.PI / 180;
+  const toDeg = r => r * 180 / Math.PI;
+
+  function haversineM(a, b) {
+    const dLat = toRad(b.lat - a.lat);
+    const dLon = toRad(b.lon - a.lon);
+    const lat1 = toRad(a.lat), lat2 = toRad(b.lat);
+    const x = Math.sin(dLat/2)**2 + Math.cos(lat1)*Math.cos(lat2)*Math.sin(dLon/2)**2;
+    return 2 * R * Math.asin(Math.sqrt(x));
+  }
+
+  function bearingDeg(a, b) {
+    const lat1 = toRad(a.lat), lat2 = toRad(b.lat);
+    const dLon = toRad(b.lon - a.lon);
+    const y = Math.sin(dLon) * Math.cos(lat2);
+    const x = Math.cos(lat1)*Math.sin(lat2) - Math.sin(lat1)*Math.cos(lat2)*Math.cos(dLon);
+    return (toDeg(Math.atan2(y, x)) + 360) % 360;
+  }
+
+  function wrap180(d) {
+    return ((d + 180) % 360) - 180;
+  }
+
+  // --------------------------
+  // Street helper
+  // --------------------------
+  function nearestStep(cur) {
+    if (!routeSteps.length) return null;
+    let best = null;
+    let bestD = Infinity;
+    for (const s of routeSteps) {
+      const d = haversineM(cur, s);
+      if (d < bestD) { bestD = d; best = s; }
+    }
+    return best;
+  }
+
+  function cleanStreetName(name) {
+    const n = (name || "").trim();
+    return n.length ? n : null;
+  }
+
+  // --------------------------
+  // SVG arrows (thicker) using theme fg
+  // --------------------------
+  function svgArrow(type) {
+    const common = `viewBox="0 0 100 100" width="100%" height="100%"`;
+    const stroke = `fill="none" stroke="var(--fg)" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"`;
+    const fill = `fill="var(--fg)"`;
+
+    if (type === "nofix") {
+      return `<svg ${common}><circle cx="35" cy="50" r="7" ${fill}/><circle cx="50" cy="50" r="7" ${fill}/><circle cx="65" cy="50" r="7" ${fill}/></svg>`;
+    }
+    if (type === "uturn") {
+      return `<svg ${common}>
+        <path d="M70 82 V45 Q70 25 50 25 Q30 25 30 45 V58" ${stroke}/>
+        <path d="M30 58 L18 46" ${stroke}/>
+        <path d="M30 58 L42 46" ${stroke}/>
+      </svg>`;
+    }
+
+    const base = `<svg ${common}>
+      <path d="M50 88 V18" ${stroke}/>
+      <path d="M50 18 L30 38" ${stroke}/>
+      <path d="M50 18 L70 38" ${stroke}/>
+    </svg>`;
+
+    const rot = {
+      up: 0, upright: 45, right: 90, downright: 135,
+      downleft: -135, left: -90, upleft: -45
+    }[type] ?? 0;
+
+    return `<div style="width:100%;height:100%;transform:rotate(${rot}deg)">${base}</div>`;
+  }
+
+  function deltaToArrow(delta) {
+    const a = Math.abs(delta);
+    if (a < 15) return "up";
+    if (a < 35) return delta > 0 ? "upright" : "upleft";
+    if (a < 80) return delta > 0 ? "right" : "left";
+    if (a < 120) return delta > 0 ? "downright" : "downleft";
+    return "uturn";
+  }
+
+  function actionTextFromArrow(arrowType) {
+    switch (arrowType) {
+      case "up": return "RECHTDOOR";
+      case "upright": return "LICHT RECHTS";
+      case "upleft": return "LICHT LINKS";
+      case "right": return "RECHTSAF";
+      case "left": return "LINKSAF";
+      case "downright": return "SCHERP RECHTS";
+      case "downleft": return "SCHERP LINKS";
+      case "uturn": return "KEER OM";
+      default: return "RECHTDOOR";
+    }
+  }
+
+  // --------------------------
+  // Route resampling
+  // --------------------------
+  function resampleRoute(points, stepM) {
+    if (points.length < 2) return points.slice();
+    const out = [points[0]];
+    let acc = 0;
+    for (let i = 1; i < points.length; i++) {
+      let p0 = out[out.length - 1];
+      let p1 = points[i];
+      let seg = haversineM(p0, p1);
+      if (seg < 1) continue;
+
+      while (seg >= (stepM - acc)) {
+        const t = (stepM - acc) / seg;
+        const lat = p0.lat + (p1.lat - p0.lat) * t;
+        const lon = p0.lon + (p1.lon - p0.lon) * t;
+        const np = {lat, lon};
+        out.push(np);
+        p0 = np;
+        seg = haversineM(p0, p1);
+        acc = 0;
+      }
+      acc += seg;
+    }
+    const last = points[points.length - 1];
+    const end = out[out.length - 1];
+    if (haversineM(end, last) > stepM * 0.3) out.push(last);
+    return out;
+  }
+
+  // --------------------------
+  // APIs
+  // --------------------------
+  async function geocodeAddress(q) {
+    const url = `${NOMINATIM}?format=json&limit=1&q=${encodeURIComponent(q)}`;
+    const r = await fetch(url, { headers: { "Accept": "application/json" } });
+    const data = await r.json();
+    if (!data || !data[0]) throw new Error("Adres niet gevonden.");
+    return { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon) };
+  }
+
+  async function fetchOsrmRoute(start, end) {
+    const url = `${OSRM_BASE}/route/v1/driving/${start.lon},${start.lat};${end.lon},${end.lat}?overview=full&geometries=geojson&steps=true`;
+    const r = await fetch(url);
+    const data = await r.json();
+    if (!data || data.code !== "Ok") throw new Error("OSRM route faalde.");
+
+    const route = data.routes[0];
+    const coords = route.geometry.coordinates.map(c => ({ lon: c[0], lat: c[1] }));
+
+    routeSteps = [];
+    const leg = route.legs && route.legs[0];
+    if (leg && Array.isArray(leg.steps)) {
+      for (const s of leg.steps) {
+        const name = cleanStreetName(s.name);
+        const loc = s.maneuver && Array.isArray(s.maneuver.location) ? s.maneuver.location : null;
+        if (loc) {
+          routeSteps.push({
+            name,
+            lon: loc[0],
+            lat: loc[1],
+            type: s.maneuver?.type || null,
+            modifier: s.maneuver?.modifier || null
+          });
+        }
+      }
+      const compact = [];
+      for (const st of routeSteps) {
+        const prev = compact[compact.length - 1];
+        if (!prev) { compact.push(st); continue; }
+        const sameName = (prev.name || "") === (st.name || "");
+        if (sameName) continue;
+        compact.push(st);
+      }
+      routeSteps = compact;
+    }
+
+    return coords;
+  }
+
+  // --------------------------
+  // GPS
+  // --------------------------
+  function startWatch() {
+    if (!navigator.geolocation) throw new Error("Geolocation niet beschikbaar.");
+    const opts = { enableHighAccuracy: true, maximumAge: 500, timeout: 10000 };
+    watchId = navigator.geolocation.watchPosition(onPos, onPosErr, opts);
+  }
+
+  function stopWatch() {
+    if (watchId != null) navigator.geolocation.clearWatch(watchId);
+    watchId = null;
+  }
+
+  function onPos(pos) {
+    const { latitude: lat, longitude: lon, speed } = pos.coords;
+    const ts = pos.timestamp || Date.now();
+    speedMps = (typeof speed === "number" && !Number.isNaN(speed)) ? speed : 0;
+
+    const cur = { lat, lon, ts };
+    gpsPill.textContent = "GPS: OK";
+    gpsPill.style.borderColor = "#2a2a2a";
+
+    if (lastFix) {
+      const dt = Math.max(0.001, (ts - lastFix.ts) / 1000);
+      const dist = haversineM({lat:lastFix.lat, lon:lastFix.lon}, {lat, lon});
+      const estSpeed = dist / dt;
+      if (estSpeed >= HEADING_MIN_SPEED_MPS) {
+        headingDeg = bearingDeg({lat:lastFix.lat, lon:lastFix.lon}, {lat, lon});
+      }
+    }
+    lastFix = cur;
+  }
+
+  function onPosErr(err) {
+    gpsPill.textContent = "GPS: FOUT";
+    gpsPill.style.borderColor = "#553";
+    statusEl.textContent = `Locatie fout: ${err.message}`;
+  }
+
+  // --------------------------
+  // HUD update loop
+  // --------------------------
+  let uiTimer = null;
+  function startUiLoop() {
+    if (uiTimer) clearInterval(uiTimer);
+    uiTimer = setInterval(updateHud, UPDATE_UI_MS);
+  }
+
+  function updateHud() {
+    if (!lastFix) {
+      arrowWrap.innerHTML = svgArrow("nofix");
+      metersEl.textContent = "-- m";
+      statusEl.textContent = "Wachten op GPS…";
+      return;
+    }
+    if (!routePts.length) {
+      arrowWrap.innerHTML = svgArrow("nofix");
+      metersEl.textContent = "-- m";
+      statusEl.textContent = "Route laden…";
+      return;
+    }
+
+    wpIdx = Math.max(0, Math.min(wpIdx, routePts.length - 1));
+    const cur = {lat:lastFix.lat, lon:lastFix.lon};
+    let target = routePts[wpIdx];
+    let d = haversineM(cur, target);
+
+    if (d <= ARRIVE_RADIUS_M && wpIdx < routePts.length - 1) {
+      wpIdx++;
+      target = routePts[wpIdx];
+      d = haversineM(cur, target);
+    }
+
+    let arrowType = "up";
+    if (headingDeg == null) {
+      arrowType = "up";
+    } else {
+      const b = bearingDeg(cur, target);
+      const delta = wrap180(b - headingDeg);
+      arrowType = deltaToArrow(delta);
+    }
+    arrowWrap.innerHTML = svgArrow(arrowType);
+
+    let shown = d;
+    if (d > 500) shown = Math.round(d / 10) * 10;
+    else if (d > 80) shown = Math.round(d / 5) * 5;
+    else shown = Math.round(d);
+    metersEl.textContent = `${shown} m`;
+
+    const kmh = Math.max(0, Math.round(speedMps * 3.6));
+    const step = nearestStep(cur);
+    const street = step && step.name ? step.name : null;
+    const actionTxt = actionTextFromArrow(arrowType);
+
+    // ✅ Change requested:
+    // Street name is now the PRIMARY (bold) text. Direction is muted.
+    const primary = street ? street : "—";
+    const secondary = `${kmh} km/h${street ? "" : ""} • ${actionTxt}`;
+    statusEl.innerHTML = `<strong>${escapeHtml(primary)}</strong> <span class="muted">• ${escapeHtml(secondary)}</span>`;
+
+    // Persist state every ~2s
+    const now = Date.now();
+    if (now - lastStateSave > 2000) {
+      saveState();
+      lastStateSave = now;
+    }
+
+    // Map update
+    if (debugMapEnabled && map) {
+      const ll = [cur.lat, cur.lon];
+      if (!posMarker) {
+        posMarker = L.circleMarker(ll, {radius:6, color:"#fff", weight:2, fillOpacity:1});
+        posMarker.addTo(map);
+      } else posMarker.setLatLng(ll);
+
+      if (wpMarker) wpMarker.setLatLng([target.lat, target.lon]);
+      map.panTo(ll, {animate:false});
+    }
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, (c) => ({
+      "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"
+    }[c]));
+  }
+
+  // --------------------------
+  // Map
+  // --------------------------
+  function ensureMap() {
+    if (map) return;
+    map = L.map("map", { zoomControl:false });
+    L.tileLayer(BW_TILES, { maxZoom: 19 }).addTo(map);
+    map.setView([52.0, 5.0], 12);
+    setTimeout(() => { try { map.invalidateSize(true); } catch {} }, 120);
+  }
+
+  function drawRouteOnMap(points) {
+    if (!debugMapEnabled) return;
+    ensureMap();
+
+    if (routeLine) routeLine.remove();
+    const latlngs = points.map(p => [p.lat, p.lon]);
+    routeLine = L.polyline(latlngs, {color:"#fff", weight:3, opacity:0.9});
+    routeLine.addTo(map);
+
+    map.fitBounds(routeLine.getBounds(), {padding:[30,30]});
+
+    const tgt = points[Math.min(wpIdx, points.length-1)];
+    if (wpMarker) wpMarker.remove();
+    wpMarker = L.circleMarker([tgt.lat, tgt.lon], {radius:6, color:"#fff", weight:2, fillOpacity:1});
+    wpMarker.addTo(map);
+
+    setTimeout(() => { try { map.invalidateSize(true); } catch {} }, 120);
+  }
+
+  // --------------------------
+  // UI actions
+  // --------------------------
+  function showHud() {
+    startScreen.classList.remove("active");
+    hudScreen.classList.add("active");
+
+    mapPane.style.display = debugMapEnabled ? "block" : "none";
+    if (debugMapEnabled) ensureMap();
+
+    applyStageTransform();
+    requestFullscreenBestEffort();
+    requestWakeLock();
+
+    hideControls();
+
+    // tap anywhere = show controls
+    hudScreen.onclick = () => showControls();
+  }
+
+  function showStart() {
+    hudScreen.classList.remove("active");
+    startScreen.classList.add("active");
+    hudScreen.onclick = null;
+    hideControls();
+  }
+
+  function toggleMirror() {
+    mirrored = !mirrored;
+    applyStageTransform();
+    saveState();
+  }
+
+  function toggleQuarterTurn() {
+    quarterTurn = !quarterTurn;
+    applyStageTransform();
+    saveState();
+  }
+
+  function toggleMapPane() {
+    debugMapEnabled = !debugMapEnabled;
+    mapPane.style.display = (hudScreen.classList.contains("active") && debugMapEnabled) ? "block" : "none";
+    if (debugMapEnabled) ensureMap();
+    applyStageTransform();
+    saveState();
+  }
+
+  // SpeechRecognition
+  function speechSupported() {
+    return ("webkitSpeechRecognition" in window) || ("SpeechRecognition" in window);
+  }
+
+  function startSpeech() {
+    return new Promise((resolve, reject) => {
+      if (!speechSupported()) return reject(new Error("Spraak niet ondersteund. Typ het adres."));
+
+      const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+      const rec = new SR();
+      rec.lang = "nl-NL";
+      rec.interimResults = false;
+      rec.maxAlternatives = 1;
+
+      primaryBtn.textContent = "🎙 Luisteren…";
+      startStatus.textContent = "Spreek nu je bestemming…";
+
+      rec.onresult = (e) => {
+        const txt = e.results[0][0].transcript;
+        addrInput.value = txt;
+        saveState();
+        resolve(txt);
+      };
+      rec.onerror = (e) => reject(new Error(`Spraakfout: ${e.error}`));
+      rec.onend = () => { primaryBtn.textContent = "▶ Start (spreek of typ)"; };
+      rec.start();
+    });
+  }
+
+  async function startNavigation() {
+    const q = addrInput.value.trim();
+    if (!q) throw new Error("Vul of spreek eerst een bestemming in.");
+
+    startStatus.textContent = "Locatie opvragen… (sta toe in je browser)";
+    gpsPill.textContent = "GPS: …";
+
+    startWatch();
+    await waitForFix(12000);
+
+    const start = {lat:lastFix.lat, lon:lastFix.lon};
+
+    startStatus.textContent = "Bestemming zoeken…";
+    const dest = await geocodeAddress(q);
+
+    startStatus.textContent = "Route berekenen…";
+    const rawRoute = await fetchOsrmRoute(start, dest);
+
+    routePts = resampleRoute(rawRoute, LOOKAHEAD_STEP_M);
+    wpIdx = 0;
+
+    saveState();
+
+    showHud();
+    drawRouteOnMap(routePts);
+    startUiLoop();
+  }
+
+  function waitForFix(ms) {
+    return new Promise((resolve, reject) => {
+      const t0 = Date.now();
+      const it = setInterval(() => {
+        if (lastFix) { clearInterval(it); resolve(true); }
+        else if (Date.now() - t0 > ms) { clearInterval(it); reject(new Error("Geen GPS fix ontvangen.")); }
+      }, 250);
+    });
+  }
+
+  function stopAll() {
+    stopWatch();
+    releaseWakeLock();
+
+    routePts = [];
+    routeSteps = [];
+    wpIdx = 0;
+    headingDeg = null;
+    lastFix = null;
+    speedMps = 0;
+
+    if (uiTimer) clearInterval(uiTimer);
+    uiTimer = null;
+
+    clearState();
+    hideControls();
+
+    showStart();
+    startStatus.textContent = "Gestopt. Typ of spreek een nieuwe bestemming.";
+  }
+
+  // --------------------------
+  // Primary start action
+  // --------------------------
+  primaryBtn.addEventListener("click", async () => {
+    primaryBtn.style.opacity = "0.95";
+
+    try {
+      if (!addrInput.value.trim()) {
+        try {
+          await startSpeech();
+        } catch (e) {
+          startStatus.textContent = e.message + " (je kunt ook typen)";
+          return;
+        }
+      }
+
+      primaryBtn.textContent = "Bezig…";
+      primaryBtn.style.pointerEvents = "none";
+
+      await startNavigation();
+
+    } catch (e) {
+      startStatus.textContent = `Fout: ${e.message || e}`;
+      try { stopWatch(); } catch {}
+    } finally {
+      primaryBtn.textContent = "▶ Start (spreek of typ)";
+      primaryBtn.style.pointerEvents = "auto";
+      primaryBtn.style.opacity = "1";
+    }
+  });
+
+  addrInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") primaryBtn.click();
+  });
+
+  // --------------------------
+  // HUD button wiring
+  // --------------------------
+  mirrorToggle.addEventListener("click", (e) => { e.stopPropagation(); toggleMirror(); showControls(); });
+  rotToggle.addEventListener("click", (e) => { e.stopPropagation(); toggleQuarterTurn(); showControls(); });
+  mapToggle.addEventListener("click", (e) => { e.stopPropagation(); toggleMapPane(); showControls(); });
+  stopBtn.addEventListener("click", (e) => { e.stopPropagation(); stopAll(); });
+
+  // NEW: theme pickers
+  function hookColorPicker(picker, kind) {
+    if (!picker) return;
+
+    // prevent tap from closing / interfering
+    picker.addEventListener("click", (e) => { e.stopPropagation(); showControls(); });
+    picker.addEventListener("touchstart", (e) => { e.stopPropagation(); showControls(); }, {passive:true});
+
+    picker.addEventListener("input", (e) => {
+      const v = e.target.value;
+      if (kind === "bg") applyTheme(v, themeFg);
+      if (kind === "fg") applyTheme(themeBg, v);
+      showControls();
+    });
+  }
+  hookColorPicker(bgPicker, "bg");
+  hookColorPicker(fgPicker, "fg");
+
+  // Long press to stop + show controls on touch
+  let lpTimer = null;
+  hudScreen.addEventListener("touchstart", () => {
+    showControls();
+    lpTimer = setTimeout(() => stopAll(), 900);
+  }, {passive:true});
+  hudScreen.addEventListener("touchend", () => {
+    if (lpTimer) clearTimeout(lpTimer);
+    lpTimer = null;
+  }, {passive:true});
+
+  // --------------------------
+  // Restore previous session + theme
+  // --------------------------
+  const t = loadTheme();
+  if (t) applyTheme(t.bg, t.fg); else applyTheme(themeBg, themeFg);
+
+  const restored = loadState();
+  if (restored) {
+    // restore theme from state if present (wins)
+    if (typeof restored.themeBg === "string") themeBg = restored.themeBg;
+    if (typeof restored.themeFg === "string") themeFg = restored.themeFg;
+    applyTheme(themeBg, themeFg);
+
+    // restore route session if present
+    if (Array.isArray(restored.routePts) && restored.routePts.length >= 2) {
+      routePts = restored.routePts;
+      routeSteps = restored.routeSteps || [];
+      wpIdx = Math.max(0, Math.min(restored.wpIdx || 0, routePts.length - 1));
+    }
+
+    addrInput.value = restored.addr || "";
+    debugMapEnabled = !!restored.debugMapEnabled;
+    mirrored = !!restored.mirrored;
+    quarterTurn = !!restored.quarterTurn;
+
+    applyStageTransform();
+
+    try {
+      if (routePts.length) {
+        startWatch();
+        showHud();
+        if (debugMapEnabled) {
+          mapPane.style.display = "block";
+          drawRouteOnMap(routePts);
+        }
+        startUiLoop();
+        startStatus.textContent = "Vorige sessie hersteld.";
+      } else {
+        startStatus.textContent = speechSupported()
+          ? "Tip: tik Start om te spreken. In HUD: tik = opties tonen."
+          : "Spraak niet ondersteund. Typ de bestemming en druk op Start.";
+      }
+    } catch {}
+  } else {
+    startStatus.textContent = speechSupported()
+      ? "Tip: tik Start om te spreken. In HUD: tik = opties tonen."
+      : "Spraak niet ondersteund. Typ de bestemming en druk op Start.";
+  }
+
+  applyStageTransform();
+})();
+</script>
+</body>
+</html>
